@@ -27,3 +27,4 @@ Install devkitPro's 3DS toolchain and set `DEVKITPRO` and `DEVKITARM`. From the 
 The player browses YouTube with audio-only playback. Pause a video, press Y, choose 128 or 256 kbps, then choose whether to embed the video's thumbnail as MP3 cover art. A final confirmation starts the download and conversion. MP3s are saved under `SD:/download audio`; downloads longer than one hour are blocked. A three-page guide appears on first launch and can be reopened by holding SELECT during startup.
 
 The cover is the video's thumbnail, which may differ from official album artwork. If it cannot be retrieved, the audio still saves and the result screen reports that the cover is unavailable. See [MP3_DOWNLOADER_CHANGES.md](MP3_DOWNLOADER_CHANGES.md) for the latest changes.
+I am not responsible for the user's actions; please respect licenses and the copyrights of those who deserve them.
