@@ -6,6 +6,8 @@ Shield MP3 Downloader is a homebrew application for 3DS, based on the open-sourc
 
 This modified version focuses on music playback, MP3 downloading and audio conversion, with support for 128 kbps and 256 kbps output.
 
+Je travaille actuellement sur la maintenance de la stabilité de l'app ainsi qu'à ses fonctionnalité, je m'excuse du retard des majs ect.
+
 ### Credits
 
 - **FourthTube** — Original open-source project by Erie Valley Software and contributors.
