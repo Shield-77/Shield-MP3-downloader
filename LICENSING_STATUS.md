@@ -9,3 +9,18 @@ Les archives précompilées `.a` et `.la` ont été retirées de la copie source
 FFmpeg peut relever de la LGPL ou de la GPL selon les options et composants activés. Ses [consignes officielles de licence](https://ffmpeg.org/legal.html) demandent notamment que les sources correspondent aux bibliothèques distribuées. Les futurs builds et releases doivent documenter cette correspondance avant publication.
 
 Les outils `makerom` et `bannertool` sont externes et ne sont pas distribués avec le source. Voir `BUILD-TOOLS.md`.
+
+## Relevé des bibliothèques FFmpeg locales (15 novembre 2026)
+
+Les trois dossiers de travail locaux utilisés pour MP3 Downloader, MP4 Player et MP4 Converter contiennent **six archives FFmpeg strictement identiques octet pour octet**. Leurs SHA-256 sont :
+
+| Archive | SHA-256 |
+| --- | --- |
+| `libavcodec.a` | `b0ec02def82c028f744b5c8b7b6247961c81ae747f2c38577317d49e58f766b8` |
+| `libavfilter.a` | `759610858238955549997a1ad375efb562dd279c326cb0402387a9456eed0d27` |
+| `libavformat.a` | `0d9b3a708ea0438d84f9eebeb008f9a8635b5f160c6c236ca426cd7cc56d6ab4` |
+| `libavutil.a` | `0686e42596f39bb5be60c2b666d9e383487c6458cabb1334fd674e23b2736075` |
+| `libswresample.a` | `0a58c02cb6b283674954bda2778ebf99d2d5b5c9a8a4719febe34b33bbac4e03` |
+| `libswscale.a` | `1f89104514f677ab29efe4f8b158b08e2f64eb4352a38001914f50f12bf11e3f` |
+
+Le fichier hérité `library/FFmpeg/build.txt` indique le commit source [`aea5ffd1d2d6d67f2557e38e9e7746b850f8f4bc`](https://github.com/windows-server-2003/FFmpeg/commit/aea5ffd1d2d6d67f2557e38e9e7746b850f8f4bc), devkitARM 68, une chaîne de version `git-2026-07-25-75a6143` et une ligne `configure`. L’existence du commit a été confirmée. **Ce relevé ne prouve pas** que les archives locales ont été construites avec ce commit, ni que ces mêmes octets ont été liés dans les trois CIA déjà publiés. Les options de licence effectives et les sources exactes correspondant aux CIA restent donc à établir par des journaux de build ou une reconstruction contrôlée.
