@@ -1,4 +1,11 @@
-# MP3 Downloader — CIA version 2
+# MP3 Downloader — v1.03, CIA version 4
+
+- Ouvrir une playlist affiche sa liste sans lancer la vidéo intégrée à son URL.
+- Toucher une autre vidéo de la playlist affiche sa fiche ; seul le bouton Play lance cette sélection.
+- La lecture automatique configurée reste disponible après une lecture lancée volontairement.
+- Des messages de diagnostic distinguent l'ouverture d'une playlist d'une demande Play.
+
+## Historique : CIA version 2
 
 - Three-page first-use guide on the upper screen. A advances, B goes back, and SELECT held at startup reopens it. Completion is saved in the CIA save data, with an SD marker fallback when save data is unavailable.
 - After choosing 128 or 256 kbps, A requests an embedded cover and B selects no cover. X cancels this choice. The separate confirmation screen still follows.

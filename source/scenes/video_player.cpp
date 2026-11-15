@@ -751,7 +751,12 @@ debug_info_view =
     void VideoPlayer_resume(std::string arg) {
 	    if (arg != "") {
 		    if (arg != cur_displaying_url) {
-			    send_change_video_request(arg, !vid_play_request || (vid_pausing && eof_reached), true, false);
+			    // Playlist links carry a video ID so the page can show its entries.
+			    // Opening that page is not a request to play the linked video.
+			    bool playlist_navigation = !youtube_get_playlist_id_by_url(arg).empty();
+			    bool start_playback = !playlist_navigation && (!vid_play_request || (vid_pausing && eof_reached));
+			    if (playlist_navigation) logger.info("video_player", "playlist navigation: display only");
+			    send_change_video_request(arg, start_playback, true, false);
 			    video_retry_left = MAX_RETRY_CNT;
 		    }
 	    }
@@ -1135,6 +1140,7 @@ debug_info_view =
 					    play_button
 					        ->set_on_view_released([url](View &) {
 						        if (cur_video_info.id != playing_video_info.id || !vid_play_request) {
+							        logger.info("video_player", "play requested by user");
 							        send_change_video_request_wo_lock(url, true, false, false);
 						        }
 					        })
