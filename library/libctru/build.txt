@@ -1,0 +1,8 @@
+NOTE (copie publique) : ces instructions proviennent du projet amont. Les bibliothèques précompilées ont été retirées ; la correspondance avec le CIA publié n’a pas été vérifiée.
+
+Add -Wno-error=unused-but-set-variable to the Makefile CFLAGS.
+Otherwise it shows an error in gdbhio.c
+
+Current binaries are built with:
+	- Smu1zel/libctru fourthtube branch at 8530a3b8a5d9eed86348b7578d1b28337ba2aca4
+	- devkitARM release 68

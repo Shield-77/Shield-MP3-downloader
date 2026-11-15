@@ -1,35 +1,23 @@
-## Shield MP3 Downloader
+# Shield MP3 Downloader
 
-**Codex was used to write the C++ code**
+Application 3DS de Shield-77 basée sur [FourthTube](https://github.com/erievs/FourthTube), lui-même issu de ThirdTube. Codex a été utilisé pour écrire les modifications C++ de SHIELD. La [dernière release v1.02](https://github.com/Shield-77/Shield-MP3-downloader/releases/tag/v1.02) fournit `MP3Downloader_dev.cia`.
 
-Shield MP3 Downloader is a homebrew application for 3DS, based on the open-source project FourthTube.
+L’application permet d’écouter le son d’une vidéo et d’enregistrer un MP3 en 128 ou 256 kb/s. Pour exporter, mettez la lecture en pause, appuyez sur **Y**, choisissez la qualité, puis indiquez si la miniature doit être intégrée comme pochette. Une confirmation précède le téléchargement. Le fichier est enregistré dans `SD:/download audio`. Les téléchargements de plus d’une heure sont bloqués. La miniature peut différer d’une pochette d’album ; si elle manque, l’audio peut quand même être enregistré et l’écran de résultat le signale.
 
-This modified version focuses on music playback, MP3 downloading and audio conversion, with support for 128 kbps and 256 kbps output.
+Au premier lancement, l’application propose la langue et un guide de trois pages. Maintenir **SELECT** pendant le démarrage rouvre le guide. Voir [les changements de la version actuelle](MP3_DOWNLOADER_CHANGES.md).
 
-Je travaille actuellement sur la maintenance de la stabilité de l'app ainsi qu'à ses fonctionnalité, je m'excuse du retard des majs ect.
+## Code et droits
 
-### Credits
+Le [code de l’application](source/), les [ressources](resource/) et les scripts de construction sont consultables dans ce dépôt. Le [ZIP source](Shield-MP3-downloader-source.zip) contient la même copie publique. Les bibliothèques statiques tierces précompilées en ont été retirées : leurs sources et options exactes doivent être vérifiées avant de les redistribuer. Cette archive seule ne permet donc pas de reproduire à l’identique le CIA déjà publié.
 
-- **FourthTube** — Original open-source project by Erie Valley Software and contributors.
-- **ThirdTube** — Original project on which FourthTube is based.
-- **SHIELD** — MP3 Downloader modifications, features and adaptations.
+Le code hérité de FourthTube/ThirdTube et les modifications SHIELD sont distribués sous GPL v3 ou ultérieure selon la [licence du dépôt](LICENSE). Les dépendances et ressources tierces conservent leurs propres licences ; consulter [l’état des licences et de la compilation](LICENSING_STATUS.md). La GPL n’accorde pas le droit de faire passer un fork pour une release officielle de Shield-77. Les créations téléchargées par l’utilisateur restent soumises aux droits de leurs auteurs.
 
-Original project: https://github.com/erievs/FourthTube
+## Compiler depuis les sources
 
-### License
+Il faut devkitPro/devkitARM, les bibliothèques 3DS requises, et des builds compatibles de FFmpeg, libctru, libcurl, brotli et nghttp2. Leurs archives statiques ne sont pas fournies ici. Les chemins se configurent par `FFMPEG_ROOT`, `LIBCTRU_ROOT`, `LIBCURL_ROOT`, `LIBBROTLI_ROOT` et `NGHTTP2_ROOT`. La bibliothèque Shine est construite depuis les sources incluses. Obtenir `makerom` et `bannertool` séparément ; voir [BUILD-TOOLS.md](BUILD-TOOLS.md).
 
-This project is distributed under the GNU General Public License version 3.0 or later (GPL-3.0-or-later), following the license of FourthTube.
+```sh
+make BUILD_JOBS=1 FFMPEG_ROOT=/chemin/FFmpeg LIBCTRU_ROOT=/chemin/libctru LIBCURL_ROOT=/chemin/libcurl LIBBROTLI_ROOT=/chemin/brotli NGHTTP2_ROOT=/chemin/nghttp2
+```
 
-Original copyright notices and applicable third-party licenses are retained.
-
-### Source and build
-
-Download and extract [Shield-MP3-downloader-source.zip](Shield-MP3-downloader-source.zip) for the MP3 Downloader source tree, RomFS assets and build scripts. It contains no CIA or other SHIELD applications. The upstream FourthTube and ThirdTube projects retain their own credits and licenses. FFmpeg and libctru source locations are listed in `.gitmodules`; the headers and static libraries used by the local development build are included under `library/`.
-
-Install devkitPro's 3DS toolchain and set `DEVKITPRO` and `DEVKITARM`. Obtain `makerom` and `bannertool` separately from their projects and place binaries compatible with your PC in `resource/tools/`. They are not redistributed in this source archive. See `BUILD-TOOLS.md`. From the extracted archive, run `make BUILD_JOBS=1`. The only target is MP3 Downloader and the resulting installable file is `MP3Downloader_dev.cia`.
-
-The player browses YouTube with audio-only playback. Pause a video, press Y, choose 128 or 256 kbps, then choose whether to embed the video's thumbnail as MP3 cover art. A final confirmation starts the download and conversion. MP3s are saved under `SD:/download audio`; downloads longer than one hour are blocked. A language choice and three-page guide appear on first launch; the guide can be reopened by holding SELECT during startup.
-
-The cover is the video's thumbnail, which may differ from official album artwork. If it cannot be retrieved, the audio still saves and the result screen reports that the cover is unavailable. See [MP3_DOWNLOADER_CHANGES.md](MP3_DOWNLOADER_CHANGES.md) for the latest changes.
-
-I am not responsible for the user's actions; please respect licenses and the copyrights of those who deserve them.
+La sortie prévue est `MP3Downloader_dev.cia`. Les chemins et étapes d’origine des dépendances sont documentés dans `library/*/build.txt`, mais leur correspondance avec le CIA de la release n’a pas été vérifiée. Aucun nouveau CIA n’a été produit par cette mise à jour du dépôt.
