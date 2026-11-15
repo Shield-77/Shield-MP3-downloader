@@ -55,7 +55,7 @@ LIBRARY := library
 GFXBUILD	:=	$(ROMFS)/gfx
 TIME := $(shell date +"%Y-%m-%d %H:%M:%S %Z")
 #---------------------------------------------------------------------------------
-APP_VER					:= 4
+APP_VER					:= 5
 APP_TITLE				:= MP3 Downloader
 APP_DESCRIPTION				:= Audio only YouTube client with MP3 downloads
 APP_AUTHOR				:= FourthTube Community

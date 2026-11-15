@@ -145,6 +145,7 @@ std::set<PostView *> comment_thumbnail_loaded_list;
 
 std::string channel_id_pressed;
 std::string suggestion_clicked_url; // also used for playlist
+bool playlist_item_selected = false;
 
 TabView *main_view = NULL;
 
@@ -758,6 +759,8 @@ debug_info_view =
 			    if (playlist_navigation) logger.info("video_player", "playlist navigation: display only");
 			    send_change_video_request(arg, start_playback, true, false);
 			    video_retry_left = MAX_RETRY_CNT;
+		    } else {
+		        playlist_item_selected = false;
 		    }
 	    }
 	    main_view->reset_holding_status();
@@ -825,7 +828,10 @@ debug_info_view =
 		    cur_view->set_auxiliary_lines({item.playlist.video_count_str});
 	    }
 	    cur_view->set_get_background_color(View::STANDARD_BACKGROUND);
-	    cur_view->set_on_view_released([item](View &view) { suggestion_clicked_url = item.get_url(); });
+	    cur_view->set_on_view_released([item](View &view) {
+	        playlist_item_selected = main_view->selected_tab == TAB_PLAYLIST && item.type == YouTubeSuccinctItem::VIDEO;
+	        suggestion_clicked_url = item.get_url();
+	    });
 	    cur_view->set_is_playlist(item.type == YouTubeSuccinctItem::PLAYLIST);
 
 	    return cur_view;
@@ -1139,6 +1145,7 @@ debug_info_view =
 				    if (tmp_video_info.is_playable()) {
 					    play_button
 					        ->set_on_view_released([url](View &) {
+						        if (url != cur_displaying_url || is_async_task_running(load_video_page)) return;
 						        if (cur_video_info.id != playing_video_info.id || !vid_play_request) {
 							        logger.info("video_player", "play requested by user");
 							        send_change_video_request_wo_lock(url, true, false, false);
@@ -1361,10 +1368,12 @@ debug_info_view =
     cur_video_info = tmp_video_info;
     cache_video_info_wo_lock(url, tmp_video_info);
     if (cur_video_info.playlist.videos.size()) {
+	    int requested_tab = playlist_item_selected ? TAB_GENERAL : TAB_PLAYLIST;
+	    playlist_item_selected = false;
 	    main_view
 	        ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, captions_tab_view, playback_tab_view,
 	                     playlist_tab_view},
-	                    TAB_PLAYLIST)
+	                    requested_tab)
 	        ->set_tab_texts<std::function<std::string()>>(
 	            {[]() { return LOCALIZED(GENERAL); }, []() { return LOCALIZED(SUGGESTIONS); },
 	             []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(CAPTIONS); },
@@ -1488,6 +1497,7 @@ debug_info_view =
 			    audio_only_mode = true;
 		    }
 	    } else {
+	    playlist_item_selected = false;
 		    video_p_value = var_video_quality;
 	    }
     }
@@ -1538,20 +1548,8 @@ debug_info_view =
 	    misc_tasks_request(TASK_SAVE_SETTINGS);
     });
 #endif
-    // update playlist tab
-    if (cur_video_info.playlist.id != "" && cur_video_info.playlist.id == tmp_video_info.playlist.id) {
-	    for (size_t i = 0; i < cur_video_info.playlist.videos.size(); i++) {
-		    if ((int)i == cur_video_info.playlist.selected_index) {
-			    playlist_list_videos_view->views[i]->set_get_background_color(
-			        [](const View &) { return COLOR_LIGHT_BLUE; });
-		    } else if (youtube_get_video_id_by_url(tmp_video_info.playlist.videos[i].url) == tmp_video_info.id) {
-			    playlist_list_videos_view->views[i]->set_get_background_color(
-			        [](const View &) { return COLOR_LIGHT_GREEN; });
-		    } else {
-			    playlist_list_videos_view->views[i]->set_get_background_color(View::STANDARD_BACKGROUND);
-		    }
-	    }
-    }
+    // new_playlist_views already contains the selection colors. The old view
+    // vector may have a different size, so never index it with the new list.
     small_resource_lock.unlock();
     }
     }
@@ -2253,13 +2251,20 @@ debug_info_view =
 				    // Keep a short audio reserve while H.264 video is decoded. On Old 3DS,
 				    // software video decoding can take long enough to drain NDSP's queue;
 				    // audio packets are independent and can safely be decoded a little ahead.
-				    constexpr double AUDIO_RESERVE_SECONDS = 1.5;
+				    // Audio-only streams can tolerate a slightly larger reserve on Old 3DS.
+				    const double AUDIO_RESERVE_SECONDS = audio_only_mode ? 2.5 : 1.5;
 				    if (type == NetworkMultipleDecoder::PacketType::VIDEO && network_decoder.has_audio_packet() &&
 				        Util_speaker_get_buffered_duration(0, vid_sample_rate) < AUDIO_RESERVE_SECONDS) {
 					    type = NetworkMultipleDecoder::PacketType::AUDIO;
 				    }
 
 				    if (type == NetworkMultipleDecoder::PacketType::EoF) {
+				        // A short stream or a seek near its end may never fill the reserve.
+				        // Release queued audio before waiting for the final buffers to drain.
+				        if (vid_startup_buffering && !vid_pausing && !vid_pausing_seek) {
+				            vid_startup_buffering = false;
+				            Util_speaker_resume(0);
+				        }
 					    // The demuxer can finish while decoded audio/video is still queued.
 					    // Keep the converter running until the final frame is presented.
 					    while ((!Util_speaker_is_buffer_empty(0) || network_decoder.get_raw_buffer_num() != 0 ||
@@ -2882,7 +2887,12 @@ debug_info_view =
 		    } else
 #endif
 		    if (key.p_a) {
-			    if (vid_play_request) {
+			    if (!is_async_task_running(load_video_page) && cur_video_info.is_playable() &&
+			        cur_video_info.id == youtube_get_video_id_by_url(cur_displaying_url) &&
+			        (!vid_play_request || cur_video_info.id != playing_video_info.id)) {
+			        logger.info("video_player", "play requested by A for displayed video");
+			        send_change_video_request(cur_displaying_url, true, false, false);
+			    } else if (vid_play_request) {
 				    if (vid_pausing) {
 					    if (!vid_pausing_seek) {
 						    Util_speaker_resume(0);

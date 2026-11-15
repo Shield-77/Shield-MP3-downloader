@@ -1,10 +1,12 @@
 # Shield MP3 Downloader
 
-Application 3DS de Shield-77 basée sur [FourthTube](https://github.com/erievs/FourthTube), lui-même issu de ThirdTube. Codex a été utilisé pour écrire les modifications C++ de SHIELD. La [release v1.03](https://github.com/Shield-77/Shield-MP3-downloader/releases/tag/v1.03) fournit `MP3Downloader_dev.cia`.
+Application 3DS de Shield-77 basée sur [FourthTube](https://github.com/erievs/FourthTube), lui-même issu de ThirdTube. Codex a été utilisé pour écrire les modifications C++ de SHIELD. La [release v1.04](https://github.com/Shield-77/Shield-MP3-downloader/releases/tag/v1.04) fournit `MP3Downloader_dev.cia`.
 
 L’application permet d’écouter le son d’une vidéo et d’enregistrer un MP3 en 128 ou 256 kb/s. Pour exporter, mettez la lecture en pause, appuyez sur **Y**, choisissez la qualité, puis indiquez si la miniature doit être intégrée comme pochette. Une confirmation précède le téléchargement. Le fichier est enregistré dans `SD:/download audio`. Les téléchargements de plus d’une heure sont bloqués. La miniature peut différer d’une pochette d’album ; si elle manque, l’audio peut quand même être enregistré et l’écran de résultat le signale.
 
 Au premier lancement, l’application propose la langue et un guide de trois pages. Maintenir **SELECT** pendant le démarrage rouvre le guide. Voir [les changements de la version actuelle](MP3_DOWNLOADER_CHANGES.md).
+
+Dans une playlist, toucher une vidéo affiche sa fiche et son bouton Play. **A** lance la vidéo affichée, puis sert à mettre en pause ou reprendre sa lecture. Le module de mise à jour hérité de FourthTube a été retiré des paramètres ; les releases de Shield MP3 Downloader sont publiées ici et consultables avec Shield Updater.
 
 ## Code et droits
 

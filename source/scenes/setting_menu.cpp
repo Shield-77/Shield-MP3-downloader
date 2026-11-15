@@ -444,8 +444,7 @@ void Sem_init(void) {
 	popup_view->set_is_visible(false);
 	toast_view = new TextView((320 - 150) / 2, 190, 150, DEFAULT_FONT_INTERVAL + SMALL_MARGIN);
 	toast_view->set_is_visible(false);
-	release_notes_view = new VerticalListView(0, 10, 320);
-	release_notes_view->set_is_visible(false);
+	release_notes_view = NULL;
 	
 	main_tab_view = (new TabView(0, 0, 320, CONTENT_Y_HIGH - TOP_HEIGHT))
 		->set_stretch_subview(true)
@@ -705,74 +704,6 @@ void Sem_init(void) {
 						}),
 					(new EmptyView(0, 0, 320, 10))
 				}),
-			// Tab #4 : Update
-			(new ScrollView(0, 0, 320, 0))
-				->set_views({
-					(new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL + SMALL_MARGIN * 2))
-						->set_text((std::function<std::string ()>) [] () { return LOCALIZED(UPDATE) + " - " + DEF_CURRENT_APP_VER; })
-						->set_font_size(0.6, DEFAULT_FONT_INTERVAL)
-						->set_text_offset(0, -2),
-					(new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL + SMALL_MARGIN))
-						->set_text((std::function<std::string ()>) [] () -> std::string {
-							if (update_state == UpdateState::CHECKING_UPDATES) return LOCALIZED(CHECKING_FOR_UPDATES);
-							if (update_state == UpdateState::FAILED_CHECKING) return LOCALIZED(FAILED_CHECKING_UPDATES) + " : " + update_error_message;
-							if (update_state == UpdateState::UP_TO_DATE) return LOCALIZED(APP_UP_TO_DATE);
-							if (update_state == UpdateState::UPDATES_AVAILABLE) return LOCALIZED(UPDATES_AVAILABLE) + " : " + next_version_str;
-							if (update_state == UpdateState::INSTALLING) return install_progress_str;
-							if (update_state == UpdateState::FAILED_INSTALLING) return LOCALIZED(UPDATE_FAIL) + " : " + update_error_message;
-							if (update_state == UpdateState::SUCCEEDED_INSTALLING) return LOCALIZED(UPDATE_SUCCESS);
-							return "";
-						}),
-					(new EmptyView(0, 0, 320, SMALL_MARGIN)),
-					(update_progress_bar_view = (new ProgressBarView(10, 0, 300, 5)))
-						->set_get_color([] () { return DEF_DRAW_BLUE; })
-						->set_is_visible(false),
-					(new EmptyView(0, 0, 320, SMALL_MARGIN)),
-					(new TextView(10, 0, 100, DEFAULT_FONT_INTERVAL + SMALL_MARGIN * 2))
-						->set_text((std::function<std::string ()>) [] () -> std::string {
-							if (update_state == UpdateState::FAILED_CHECKING || update_state == UpdateState::UP_TO_DATE) return LOCALIZED(RETRY);
-							if (update_state == UpdateState::UPDATES_AVAILABLE) return LOCALIZED(UPDATE);
-							if (update_state == UpdateState::FAILED_INSTALLING) return LOCALIZED(RETRY);
-							return "";
-						})
-						->set_x_alignment(TextView::XAlign::CENTER)
-						->set_text_offset(0, -1)
-						->set_on_view_released([] (const View &) {
-							if (update_state == UpdateState::FAILED_CHECKING || update_state == UpdateState::UP_TO_DATE) {
-								update_state = UpdateState::CHECKING_UPDATES;
-								var_need_refresh = true;
-							}
-							if (update_state == UpdateState::UPDATES_AVAILABLE || update_state == UpdateState::FAILED_INSTALLING) {
-								std::vector<std::string> confirm_lines;
-								if (is_3dsx) confirm_lines = truncate_str(std::regex_replace(LOCALIZED(OVERWRITE_3DSX_CONFIRM), std::regex("%0"), path_3dsx), DIALOG_WIDTH, 3, 0.5, 0.5);
-								else confirm_lines = {LOCALIZED(INSTALL_CIA_CONFIRM)};
-								
-								popup_view->get_message_view()->set_text_lines(confirm_lines)->update_y_range(0, 45);
-								popup_view->set_buttons<std::function<std::string ()> >({
-									[] () { return LOCALIZED(CANCEL); },
-									[] () { return LOCALIZED(OK); }
-								},
-								[] (OverlayDialogView &, int button_pressed) {
-									if (button_pressed == 1) update_state = UpdateState::INSTALLING;
-									return true; // close the dialog
-								});
-								popup_view->set_is_visible(true);
-								var_need_refresh = true;
-							}
-						})
-						->set_get_background_color([] (const View &view) -> u32 {
-							if (update_state == UpdateState::FAILED_CHECKING || update_state == UpdateState::UPDATES_AVAILABLE || update_state == UpdateState::UP_TO_DATE) {
-								int blue = std::min<int>(0xFF, 0xB0 + 0x30 * view.touch_darkness);
-								int other = 0x50 + 0x20 * (1 - view.touch_darkness);
-								return 0xFF000000 | blue << 16 | other << 8 | other;
-							}
-							return DEFAULT_BACK_COLOR;
-						}),
-					(new RuleView(0, 6, 320, 1))
-					    ->set_get_background_color([] (const View &) {return DEFAULT_BACK_COLOR; }),
-					    release_notes_view,
-					(new EmptyView(0, 0, 320, DEFAULT_FONT_INTERVAL))
-				}),
 			// Tab #5 : Advanced
 			(new ScrollView(0, 0, 320, 0))
 				->set_views({
@@ -943,7 +874,6 @@ void Sem_init(void) {
 			[] () { return LOCALIZED(SETTINGS_DISPLAY_UI); },
 			[] () { return LOCALIZED(PLAYBACK); },
 			[] () { return LOCALIZED(SETTINGS_DATA); },
-			[] () { return LOCALIZED(UPDATE); },
 			[] () { return LOCALIZED(SETTINGS_ADVANCED); }
 		});
 	main_view = (new VerticalListView(0, 0, 320))
@@ -972,7 +902,7 @@ void Sem_init(void) {
 		}
 	}
 	
-	update_worker_thread = threadCreate(update_worker_thread_func, (void*)(""), DEF_STACKSIZE, DEF_THREAD_PRIORITY_LOW, 1, false);
+	// The inherited updater targets a different application; keep it inactive.
 	oauth_worker_thread = threadCreate(oauth_worker_thread_func, (void*)(""), DEF_STACKSIZE, DEF_THREAD_PRIORITY_LOW, 1, false);
 	
 	// Initialize OAuth
@@ -1014,8 +944,6 @@ void Sem_exit(void) {
 	OAuth::exit();
 	
 	u64 time_out = 10000000000;
-	logger.info(DEF_MENU_EXIT_STR, "threadJoin()...", threadJoin(update_worker_thread, time_out));
-	threadFree(update_worker_thread);
 	logger.info(DEF_MENU_EXIT_STR, "oauth threadJoin()...", threadJoin(oauth_worker_thread, time_out));
 	threadFree(oauth_worker_thread);
 	

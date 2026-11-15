@@ -1,4 +1,12 @@
-# MP3 Downloader — v1.03, CIA version 4
+# MP3 Downloader — v1.04, CIA version 5
+
+- Correction du lancement explicite depuis une playlist sans lecture préalable : A démarre la vidéo affichée, puis contrôle pause/reprise.
+- Toucher un élément d’une playlist ouvre sa fiche dans l’onglet Général, où Play est accessible.
+- Suppression d’un accès hors limites lors du passage entre playlists de tailles différentes. Les couleurs de sélection sont appliquées à la nouvelle liste.
+- Le module de mise à jour hérité qui pointait vers FourthTube n’est plus accessible et ne démarre plus de tâche réseau.
+- Le mode audio seul prépare jusqu’à 2,5 secondes de son avant le début de lecture pour mieux absorber les variations brèves du réseau ; un flux court peut démarrer avec moins.
+
+## Historique : v1.03, CIA version 4
 
 - Ouvrir une playlist affiche sa liste sans lancer la vidéo intégrée à son URL.
 - Toucher une autre vidéo de la playlist affiche sa fiche ; seul le bouton Play lance cette sélection.
