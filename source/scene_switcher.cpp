@@ -148,8 +148,8 @@ void mp3_guide_draw() {
 		 "A : 128 kbps   X : 256 kbps", "Pochette : A oui, B non, X annule.",
 		 "Ensuite A confirme, B annule.", "SD:/download audio  (max. 1 heure)"},
 		{"Recherche : pad haut/bas, X ajoute la video.", "X ajoute aussi la video ouverte ou choisie.",
-		 "Touche File; A/128 ou X/256 lance la file.", "Pochette OFF par defaut; touche pour l'activer.",
-		 "Petite croix retire; Annuler remet. Bloque : touche.", "B arrete; coupure : la file reste sur la SD."},
+		 "File : bouton en haut, pres de la recherche.", "A/128 ou X/256 lance; pochette OFF par defaut.",
+		 "Petite croix retire; Annuler remet. Bloque : touche.", "B : retour; si ca telecharge, B arrete d'abord."},
 		 {"Le resultat est un MP3 stereo 44,1 kHz.", "128 kbps : plus petit; 256 : plus lourd.",
 		 "La qualite depend de la source audio.", "Sa miniature peut devenir la pochette MP3.",
 		 "Une video bloquee ne peut pas etre exportee.", "Connexion coupee ? Relance le telechargement."}
@@ -163,8 +163,8 @@ void mp3_guide_draw() {
 		 "A: 128 kbps   X: 256 kbps", "Cover: A yes, B no, X cancel.",
 		 "Then A confirms, B cancels.", "SD:/download audio  (max. 1 hour)"},
 		{"Search: up/down, X queues a video.", "X also queues the opened or chosen video.",
-		 "Tap Queue; A/128 or X/256 starts it.", "Cover is OFF by default; tap to enable.",
-		 "Small x removes; Undo restores. Tap blocked to retry.", "B stops; a lost connection keeps the queue."},
+		 "Queue: button beside search at the top.", "A/128 or X/256 starts; cover OFF by default.",
+		 "Small x removes; Undo restores. Tap blocked to retry.", "B: back; during download B stops it first."},
 		 {"Output is stereo MP3 at 44.1 kHz.", "128 kbps: smaller; 256: larger.",
 		 "Quality depends on the source audio.", "The thumbnail can become MP3 cover art.",
 		 "A blocked video cannot be exported.", "Connection lost? Retry the download."}

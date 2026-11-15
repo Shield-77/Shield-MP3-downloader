@@ -1,6 +1,6 @@
 # MP3 Downloader — v1.05, CIA version 6
 
-- File de téléchargement enregistrée sur la SD : X ajoute la vidéo sélectionnée, l’écran File lance les MP3 en série, et la petite croix retire une seule entrée avec possibilité d’annuler.
+- File de téléchargement enregistrée sur la SD : X ajoute la vidéo sélectionnée, le bouton File/Queue en haut de l’écran inférieur ouvre la file, B la ferme après avoir arrêté le traitement éventuel, et la petite croix retire une seule entrée avec possibilité d’annuler.
 - Une source bloquée ou indisponible est indiquée et sautée ; les autres titres continuent. Les échecs restent dans la file et peuvent être retentés après une coupure réseau.
 - La pagination des recherches conserve les résultats utilisables lorsqu’un élément spécial inconnu apparaît et reconnaît davantage de réponses de continuation.
 - Les miniatures utilisent jusqu’à trois transferts au repos, un pendant la lecture et aucun pendant l’export audio. Les couvertures sont facultatives et désactivées par défaut dans la file.
