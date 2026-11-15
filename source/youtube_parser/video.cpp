@@ -555,7 +555,7 @@ static std::string extractVisitorData() {
 	}
 }
 
-YouTubeVideoDetail youtube_load_video_page(std::string url) {
+YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history) {
 	YouTubeVideoDetail res;
 
 	res.id = youtube_get_video_id_by_url(url);
@@ -700,7 +700,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	if (res.id != "") {
 		res.succinct_thumbnail_url = youtube_get_video_thumbnail_url_by_id(res.id);
 	}
-	if (res.title != "" && res.id != "") {
+	if (record_history && res.title != "" && res.id != "") {
 		HistoryVideo video;
 		video.id = res.id;
 		video.title = res.title;
@@ -717,6 +717,10 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	}
 
 	return res;
+}
+
+YouTubeVideoDetail youtube_load_video_page(std::string url) {
+	return youtube_load_video_page(url, true);
 }
 
 void YouTubeVideoDetail::load_more_suggestions() {

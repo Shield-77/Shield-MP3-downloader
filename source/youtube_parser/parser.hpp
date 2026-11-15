@@ -186,6 +186,7 @@ struct YouTubeVideoDetail {
 };
 // this function does not load comments; call youtube_video_page_load_more_comments() if necessary
 YouTubeVideoDetail youtube_load_video_page(std::string url);
+YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history);
 
 struct YouTubeChannelDetail {
 	std::string id;

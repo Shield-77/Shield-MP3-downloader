@@ -26,7 +26,7 @@ static bool parse_searched_item(RJson content, std::vector<YouTubeSuccinctItem> 
 		cur_result.subscribers = get_text_from_object(channel_renderer["subscriberCountText"]);
 		cur_result.video_num = get_text_from_object(channel_renderer["videoCountText"]);
 		cur_result.icon_url = get_thumbnail_url_closest(channel_renderer["thumbnail"]["thumbnails"], 70);
-		res.push_back(YouTubeSuccinctItem(cur_result));
+		if (success) res.push_back(YouTubeSuccinctItem(cur_result));
 	} else if (content.has_key("compactRadioRenderer") || content.has_key("compactPlaylistRenderer")) {
 		auto playlist_renderer = content.has_key("compactRadioRenderer") ? content["compactRadioRenderer"]
 		                                                                 : content["compactPlaylistRenderer"];
@@ -54,7 +54,7 @@ static bool parse_searched_item(RJson content, std::vector<YouTubeSuccinctItem> 
 			}
 		}
 
-		res.push_back(YouTubeSuccinctItem(cur_list));
+		if (success) res.push_back(YouTubeSuccinctItem(cur_list));
 	} else if (content.has_key("reelShelfRenderer")) {
 		debug_warning("Skipped reelShelfRenderer");
 	} else if (content.has_key("showingResultsForRenderer")) {
@@ -131,6 +131,11 @@ YouTubeSearchResult youtube_load_search(std::string url) {
 			    for (auto i : yt_result["contents"]["sectionListRenderer"]["contents"].array_items()) {
 				    if (i.has_key("itemSectionRenderer")) {
 					    for (auto j : i["itemSectionRenderer"]["contents"].array_items()) {
+						    if (j.has_key("continuationItemRenderer")) {
+							    res.continue_token =
+							        j["continuationItemRenderer"]["continuationEndpoint"]["continuationCommand"]["token"].string_value();
+							    continue;
+						    }
 						    if (j.has_key("didYouMeanRenderer")) {
 							    debug_warning("Skipped didYouMeanRenderer");
 							    continue;
@@ -140,8 +145,9 @@ YouTubeSearchResult youtube_load_search(std::string url) {
 							    continue;
 						    }
 						    if (!parse_searched_item(j, res.results)) {
-							    debug_error("Error parsing search result item");
-							    success = false;
+							    // Search pages may contain ads or renderer types this app does
+							    // not display. Keep the usable items and continuation token.
+							    debug_warning("Skipped unsupported search result item");
 						    }
 					    }
 				    }
@@ -189,11 +195,16 @@ void YouTubeSearchResult::load_more_results() {
 	    [&](Document &, RJson yt_result) {
 		    estimated_result_num = yt_result["estimatedResults"].string_value();
 		    continue_token = "";
-		    for (auto i : yt_result["onResponseReceivedCommands"].array_items()) {
+		    for (const char *response_key : {"onResponseReceivedCommands", "onResponseReceivedActions"}) {
+		    for (auto i : yt_result[response_key].array_items()) {
 			    for (auto j : i["appendContinuationItemsAction"]["continuationItems"].array_items()) {
 				    if (j.has_key("itemSectionRenderer")) {
 					    for (auto item : j["itemSectionRenderer"]["contents"].array_items()) {
-						    parse_searched_item(item, results);
+						    if (item.has_key("continuationItemRenderer")) {
+							    continue_token = item["continuationItemRenderer"]["continuationEndpoint"]["continuationCommand"]["token"].string_value();
+						    } else {
+							    parse_searched_item(item, results);
+						    }
 					    }
 				    } else if (j.has_key("continuationItemRenderer")) {
 					    continue_token =
@@ -201,6 +212,7 @@ void YouTubeSearchResult::load_more_results() {
 					            .string_value();
 				    }
 			    }
+		    }
 		    }
 		    if (continue_token == "") {
 			    debug_caution("failed to get next continue token");

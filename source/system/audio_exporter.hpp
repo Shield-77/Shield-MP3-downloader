@@ -31,4 +31,5 @@ void AudioExport_dismiss();
 AudioExportState AudioExport_get_state();
 int AudioExport_get_progress();
 int AudioExport_get_bitrate();
+std::string AudioExport_get_error_detail();
 void AudioExport_draw_overlay();

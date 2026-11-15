@@ -8,6 +8,8 @@ void VideoPlayer_resume(std::string arg);
 
 #define VIDEO_PLAYING_BAR_HEIGHT 20
 bool video_is_playing(void);
+bool video_is_playback_active(void); // pure query for background workers
+bool video_is_media_busy(void); // decoder has not finished releasing playback resources
 void video_draw_playing_bar();
 void video_update_playing_bar(Hid_info key);
 

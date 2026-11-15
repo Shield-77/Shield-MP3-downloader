@@ -1,6 +1,7 @@
 #include "headers.hpp"
 #include "network_io.hpp"
 #include "thumbnail_loader.hpp"
+#include "scenes/video_player.hpp"
 #ifdef MP3_DOWNLOADER_APP
 #include "system/audio_exporter.hpp"
 #endif
@@ -361,14 +362,15 @@ void thumbnail_downloader_thread_func(void *arg) {
 		std::vector<NetworkResult> results(download_list.size());
 		std::vector<int> uncached_index_list;
 		std::vector<int> cached_index_list;
+		// More small images can load together while idle. During playback,
+		// reserve the connection and CPU time for the audio stream.
+		const size_t max_image_transfers = video_is_playback_active() ? 1 : 3;
 		for (size_t i = 0; i < download_list.size(); i++) {
 			if (thumbnail_cache.count(download_list[i].url)) {
 				results[i].status_code = 0; // cached
 				results[i].data = thumbnail_cache[download_list[i].url];
 				cached_index_list.push_back(i);
-			} else if (uncached_index_list.size() < 2) {
-				// Two concurrent image transfers keep sockets and receive buffers
-				// bounded while leaving bandwidth for video and audio streams.
+			} else if (uncached_index_list.size() < max_image_transfers) {
 				uncached_index_list.push_back(i);
 			}
 		}

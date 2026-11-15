@@ -1,4 +1,13 @@
-# MP3 Downloader — v1.04, CIA version 5
+# MP3 Downloader — v1.05, CIA version 6
+
+- File de téléchargement enregistrée sur la SD : X ajoute la vidéo sélectionnée, l’écran File lance les MP3 en série, et la petite croix retire une seule entrée avec possibilité d’annuler.
+- Une source bloquée ou indisponible est indiquée et sautée ; les autres titres continuent. Les échecs restent dans la file et peuvent être retentés après une coupure réseau.
+- La pagination des recherches conserve les résultats utilisables lorsqu’un élément spécial inconnu apparaît et reconnaît davantage de réponses de continuation.
+- Les miniatures utilisent jusqu’à trois transferts au repos, un pendant la lecture et aucun pendant l’export audio. Les couvertures sont facultatives et désactivées par défaut dans la file.
+- Les réponses HTTP 401/403/404/410 arrêtent rapidement une tentative impossible ; un fichier source complet est réutilisé après un échec de conversion. Le guide intégré passe à quatre pages.
+- La conversion écrit d’abord un `.part` et ne crée le MP3 final qu’après fermeture complète du fichier.
+
+## Historique : v1.04, CIA version 5
 
 - Correction du lancement explicite depuis une playlist sans lecture préalable : A démarre la vidéo affichée, puis contrôle pause/reprise.
 - Toucher un élément d’une playlist ouvre sa fiche dans l’onglet Général, où Play est accessible.
@@ -22,4 +31,4 @@
 - The artwork request has its own visible state and a 15-second timeout. It can be cancelled with B.
 - Output stays in `SD:/download audio`, stereo 44.1 kHz, at the selected MP3 bitrate. The one-hour limit remains.
 
-The CIA compiles with one build job. Playback and artwork display still need a real 3DS check.
+The CIA compiles with one build job.

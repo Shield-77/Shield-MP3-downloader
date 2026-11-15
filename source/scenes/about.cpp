@@ -13,7 +13,7 @@ bool thread_suspend = false;
 bool already_init = false;
 bool exiting = false;
 
-const std::vector<std::string> app_description_lines = {"A work-in-progress homebrew YouTube client", "for the 3DS"};
+const std::vector<std::string> app_description_lines = {"SHIELD audio player and MP3 downloader", "for the 3DS; based on FourthTube"};
 const std::vector<std::string> story_lines = {
     "ThirdTube stopped working",
     "then we, as the former ThirdTube",
@@ -21,6 +21,8 @@ const std::vector<std::string> story_lines = {
 };
 
 const std::vector<std::pair<std::string, std::vector<std::string>>> credits = {
+    {"Shield-77", {"SHIELD project and design"}},
+    {"Codex", {"C++ development with Shield-77"}},
     {"NCP 3.0", {"fixing the app"}},
     {"Smu1zel", {"fixing the app"}},
     {"5GBurrito", {"minor contributions"}},
@@ -39,7 +41,7 @@ const std::vector<std::string> license_lines = {
     "any later revisions of the GPL.",
 };
 const std::vector<std::pair<std::string, std::vector<std::string>>> third_party_licenses = {
-    {"FFmpeg", {"by the FFmpeg developers under LGPLv2"}},
+    {"FFmpeg", {"by the FFmpeg developers", "LGPL v2.1 or later, subject to build options", "Sources: ffmpeg.org and repo notices"}},
     {"rapidjson", {"by Tencent and Milo Yip under MIT license"}},
     {"libctru", {"by devkitPro under zlib License"}},
     {"libcurl", {"by Daniel Stenberg and many contributors", "under the curl license"}},
@@ -82,7 +84,7 @@ void About_init(void) {
 	                        ->set_font_size(MIDDLE_FONT_SIZE, MIDDLE_FONT_INTERVAL),
 	                    (new RuleView(0, 0, 320, SMALL_MARGIN * 2)),
 	                    (new TextView(0, 0, 320, MIDDLE_FONT_INTERVAL))
-	                        ->set_text("FourthTube")
+	                        ->set_text("Shield MP3 Downloader")
 	                        ->set_x_alignment(TextView::XAlign::CENTER)
 	                        ->set_font_size(MIDDLE_FONT_SIZE, MIDDLE_FONT_INTERVAL),
 	                    (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))

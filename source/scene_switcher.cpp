@@ -55,7 +55,7 @@ bool open_mp3_guide_save(FS_Archive *archive) {
 bool mp3_guide_saved(bool write_marker) {
 	FS_Archive archive;
 	if (!open_mp3_guide_save(&archive)) return false;
-	FS_Path path = fsMakePath(PATH_ASCII, "/guide.dat");
+	FS_Path path = fsMakePath(PATH_ASCII, "/guide-v2.dat");
 	if (write_marker) (void)FSUSER_CreateFile(archive, path, 0, 1);
 	Handle file;
 	bool okay = false;
@@ -77,7 +77,7 @@ bool mp3_guide_saved(bool write_marker) {
 }
 
 bool mp3_guide_sd_marker(bool write_marker) {
-	const char *path = "sdmc:/3ds/MP3Downloader/guide-v1.dat";
+	const char *path = "sdmc:/3ds/MP3Downloader/guide-v2.dat";
 	if (write_marker) {
 		(void)mkdir("sdmc:/3ds", 0777);
 		(void)mkdir("sdmc:/3ds/MP3Downloader", 0777);
@@ -139,29 +139,35 @@ void mp3_guide_draw() {
 		gspWaitForVBlank();
 		return;
 	}
-	static const char *const titles_fr[] = {"BIENVENUE", "TELECHARGER", "FORMAT ET AIDE"};
-	static const char *const lines_fr[3][6] = {
+	static const char *const titles_fr[] = {"BIENVENUE", "TELECHARGER", "FILE D'ATTENTE", "FORMAT ET AIDE"};
+	static const char *const lines_fr[4][6] = {
 		{"Parcours les videos YouTube en audio seul.", "Les miniatures restent visibles.",
 		 "A : ouvrir une video ou mettre en pause", "B : revenir a l'ecran precedent",
 		 "START : quitter (hors telechargement)", "SELECT au demarrage : revoir ce guide"},
 		{"Ouvre une video puis mets-la en pause.", "Y : preparer le MP3.",
 		 "A : 128 kbps   X : 256 kbps", "Pochette : A oui, B non, X annule.",
 		 "Ensuite A confirme, B annule.", "SD:/download audio  (max. 1 heure)"},
-		{"Le resultat est un MP3 stereo 44,1 kHz.", "128 kbps : plus petit; 256 : plus lourd.",
-		 "La qualite depend de la source YouTube.", "Sa miniature peut devenir la pochette MP3.",
-		 "Sans miniature, le son reste enregistre.", "Conversion lente ? Attends la progression."}
+		{"Recherche : pad haut/bas, X ajoute la video.", "X ajoute aussi la video ouverte ou choisie.",
+		 "Touche File; A/128 ou X/256 lance la file.", "Pochette OFF par defaut; touche pour l'activer.",
+		 "Petite croix retire; Annuler remet. Bloque : touche.", "B arrete; coupure : la file reste sur la SD."},
+		 {"Le resultat est un MP3 stereo 44,1 kHz.", "128 kbps : plus petit; 256 : plus lourd.",
+		 "La qualite depend de la source audio.", "Sa miniature peut devenir la pochette MP3.",
+		 "Une video bloquee ne peut pas etre exportee.", "Connexion coupee ? Relance le telechargement."}
 	};
-	static const char *const titles_en[] = {"WELCOME", "DOWNLOAD", "FORMAT AND HELP"};
-	static const char *const lines_en[3][6] = {
+	static const char *const titles_en[] = {"WELCOME", "DOWNLOAD", "DOWNLOAD QUEUE", "FORMAT AND HELP"};
+	static const char *const lines_en[4][6] = {
 		{"Browse YouTube videos in audio-only mode.", "Thumbnails remain visible.",
 		 "A: open a video or pause playback", "B: return to previous screen",
 		 "START: exit (outside a download)", "Hold SELECT at startup: reopen this guide"},
 		{"Open a video, then pause playback.", "Y: prepare the MP3 download.",
 		 "A: 128 kbps   X: 256 kbps", "Cover: A yes, B no, X cancel.",
 		 "Then A confirms, B cancels.", "SD:/download audio  (max. 1 hour)"},
-		{"Output is stereo MP3 at 44.1 kHz.", "128 kbps: smaller; 256: larger.",
+		{"Search: up/down, X queues a video.", "X also queues the opened or chosen video.",
+		 "Tap Queue; A/128 or X/256 starts it.", "Cover is OFF by default; tap to enable.",
+		 "Small x removes; Undo restores. Tap blocked to retry.", "B stops; a lost connection keeps the queue."},
+		 {"Output is stereo MP3 at 44.1 kHz.", "128 kbps: smaller; 256: larger.",
 		 "Quality depends on the source audio.", "The thumbnail can become MP3 cover art.",
-		 "Audio still saves if art is unavailable.", "Conversion slow? Watch the progress."}
+		 "A blocked video cannot be exported.", "Connection lost? Retry the download."}
 	};
 	const bool french = var_lang == "fr";
 	const char *const *titles = french ? titles_fr : titles_en;
@@ -171,13 +177,13 @@ void mp3_guide_draw() {
 		Draw_screen_ready(eye, 0xFF1B1008);
 		Draw_xy_centered("MP3 DOWNLOADER", 12, 388, 17, 42, 0.75f, 0.75f, DEF_DRAW_AQUA);
 		Draw_xy_centered(std::string(titles[mp3_guide_page]) + "  " +
-		                 std::to_string(mp3_guide_page + 1) + "/3",
+		                 std::to_string(mp3_guide_page + 1) + "/4",
 		                 18, 382, 50, 72, 0.55f, 0.55f, DEF_DRAW_YELLOW);
 		for (int i = 0; i < 6; ++i)
 			Draw(lines[mp3_guide_page][i], 27, 82 + i * 20, 0.47f, 0.47f, DEF_DRAW_WHITE);
-		Draw_xy_centered(french ? (mp3_guide_page == 2 ? "B : RETOUR       A : J'AI COMPRIS" :
+		Draw_xy_centered(french ? (mp3_guide_page == 3 ? "B : RETOUR       A : J'AI COMPRIS" :
 		                           "B : RETOUR       A : PAGE SUIVANTE") :
-		                 (mp3_guide_page == 2 ? "B: BACK       A: I UNDERSTAND" :
+		                 (mp3_guide_page == 3 ? "B: BACK       A: I UNDERSTAND" :
 		                           "B: BACK       A: NEXT PAGE"),
 		                 16, 384, 211, 233, 0.48f, 0.48f, DEF_DRAW_AQUA);
 	}
@@ -447,7 +453,7 @@ bool Menu_main(void) {
 	if (mp3_guide_pending) {
 		if (key.p_start) return false;
 		if (key.p_a) {
-			if (mp3_guide_page == 2) {
+			if (mp3_guide_page == 3) {
 				if (!mp3_guide_saved(true)) (void)mp3_guide_sd_marker(true);
 				mp3_guide_pending = false;
 				var_need_refresh = true;

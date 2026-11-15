@@ -208,6 +208,7 @@ int get_conversion_error_code(const std::string &error) {
 	if (error.find("memory") != std::string::npos) return 9;
 	if (error.find("write") != std::string::npos || error.find("SD card") != std::string::npos) return 10;
 	if (error.find("close MP3 file") != std::string::npos) return 10;
+	if (error.find("finalize MP3 file") != std::string::npos) return 10;
 	if (error.find("incomplete or unreadable") != std::string::npos) return 11;
 	return 99;
 }
@@ -411,11 +412,12 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 	for (int suffix = 1; Path(output_path).is_file(); suffix++) {
 		output_path = std::string(directory) + "/" + base + " (" + std::to_string(suffix) + ").mp3";
 	}
+	const std::string pending_output_path = output_path + ".part";
 	std::string input_path = output_path + ".source_" + audio_source_key(url, expected_size) + ".tmp";
 	long long offset = 0;
 	struct stat partial_stat;
 	if (stat(input_path.c_str(), &partial_stat) == 0 && partial_stat.st_size > 0 &&
-	    (expected_size <= 0 || partial_stat.st_size < expected_size)) {
+	    (expected_size <= 0 || partial_stat.st_size <= expected_size)) {
 		offset = partial_stat.st_size;
 	} else {
 		std::remove(input_path.c_str());
@@ -508,6 +510,12 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 			downloaded = true;
 			break;
 		}
+		// A rejected or missing source will not become playable by retrying the
+		// same URL. Fail promptly and let the caller refresh the video metadata.
+		if (status_code == 401 || status_code == 403 || status_code == 404 || status_code == 410) {
+			error = "Audio unavailable at source (HTTP " + std::to_string(status_code) + ")";
+			break;
+		}
 		if (stat(input_path.c_str(), &partial_stat) == 0) offset = partial_stat.st_size;
 		if (expected_size > 0 && offset >= expected_size) {
 			if (offset == expected_size) { downloaded = true; break; }
@@ -564,13 +572,22 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 	}
 	state.store((int)AudioExportState::ENCODING);
 	progress.store(0);
-	if (!encode_file(input_path, output_path, duration_ms, title, cover_image, error)) {
+	if (!encode_file(input_path, pending_output_path, duration_ms, title, cover_image, error)) {
 		struct stat source_stat;
 		bool keep_complete_source = expected_size > 0 && stat(input_path.c_str(), &source_stat) == 0 &&
 		                            source_stat.st_size == expected_size;
 		if (!keep_complete_source) std::remove(input_path.c_str());
-		std::remove(output_path.c_str());
+		std::remove(pending_output_path.c_str());
 		resumable_partial.store(keep_complete_source);
+		conversion_failed.store(true);
+		conversion_error_code.store(get_conversion_error_code(error));
+		return false;
+	}
+	if (rename(pending_output_path.c_str(), output_path.c_str()) != 0) {
+		error = "Could not finalize MP3 file on SD";
+		std::remove(pending_output_path.c_str());
+		if (expected_size <= 0) std::remove(input_path.c_str());
+		resumable_partial.store(expected_size > 0);
 		conversion_failed.store(true);
 		conversion_error_code.store(get_conversion_error_code(error));
 		return false;
@@ -698,6 +715,7 @@ void AudioExport_dismiss() {
 AudioExportState AudioExport_get_state() { return (AudioExportState)state.load(); }
 int AudioExport_get_progress() { return progress.load(); }
 int AudioExport_get_bitrate() { return selected_bitrate.load(); }
+std::string AudioExport_get_error_detail() { return last_error_detail; }
 
 void AudioExport_draw_overlay() {
 	AudioExportState current = AudioExport_get_state();
@@ -829,5 +847,6 @@ void AudioExport_dismiss() {}
 AudioExportState AudioExport_get_state() { return AudioExportState::IDLE; }
 int AudioExport_get_progress() { return 0; }
 int AudioExport_get_bitrate() { return 128; }
+std::string AudioExport_get_error_detail() { return ""; }
 void AudioExport_draw_overlay() {}
 #endif

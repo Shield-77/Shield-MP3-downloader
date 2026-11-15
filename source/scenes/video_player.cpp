@@ -7,6 +7,7 @@
 #include <atomic>
 
 #include "scenes/video_player.hpp"
+#include "system/download_queue.hpp"
 #include "scenes/home.hpp"
 #include "ui/overlay.hpp"
 #include "ui/ui.hpp"
@@ -53,6 +54,7 @@ bool vid_already_init = false;
 bool vid_thread_suspend = true;
 volatile bool should_suspend_decoding = false;
 volatile bool vid_play_request = false;
+std::atomic<bool> vid_media_busy(false);
 volatile bool vid_seek_request = false;
 volatile bool vid_change_video_request = false;
 volatile bool vid_pausing = false;
@@ -117,6 +119,8 @@ Mutex network_decoder_critical_lock; // locked when seeking or deiniting
 
 Mutex small_resource_lock; // locking basically all std::vector, std::string, etc
 YouTubeVideoDetail cur_video_info;
+std::string queue_feedback;
+int queue_feedback_frames = 0;
 YouTubeVideoDetail playing_video_info;
 std::map<std::string, YouTubeVideoDetail> video_info_cache;
 static std::deque<std::string> video_info_cache_order;
@@ -1128,9 +1132,13 @@ debug_info_view =
 				                           }
 			                           })}),
 			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; })};
-			    if (tmp_video_info.is_upcoming) {
+			    if (!tmp_video_info.is_playable()) {
+				    const std::string unavailable_reason = tmp_video_info.playability_reason.empty()
+				        ? (var_lang == "fr" ? "Lecture indisponible pour cette video" : "Playback unavailable for this video")
+				        : tmp_video_info.playability_reason;
 				    std::vector<View *> add_views = {
-				        (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))->set_text(tmp_video_info.playability_reason),
+				        (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL * 2))
+				            ->set_text_lines(truncate_str(unavailable_reason, 310, 2, 0.5, 0.5)),
 				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; })};
 				    main_tab_views.insert(main_tab_views.end(), add_views.begin(), add_views.end());
 			    }
@@ -1855,6 +1863,9 @@ debug_info_view =
 	    small_resource_lock.unlock();
     }
 
+    bool video_is_playback_active() { return vid_play_request; }
+    bool video_is_media_busy() { return vid_media_busy.load() || vid_change_video_request; }
+
     bool video_is_playing() {
 	    if (!vid_play_request && vid_pausing_seek) {
 		    small_resource_lock.lock();
@@ -2057,6 +2068,10 @@ debug_info_view =
 		Draw_screen_ready(0, video_get_top_screen_background_color());
 	    video_draw_video_frame();
 	    AudioExport_draw_overlay();
+	    if (queue_feedback_frames > 0 && global_current_scene == SceneType::VIDEO_PLAYER) {
+		    Draw_texture(var_square_image[0], 0xC0000000, 22, 180, 356, 30);
+		    Draw_xy_centered(queue_feedback, 28, 372, 182, 208, 0.5, 0.5, DEF_DRAW_WHITE);
+	    }
 	    video_draw_loading_status();
 	    logger.draw();
 	    if (video_should_draw_top_bar()) {
@@ -2128,6 +2143,7 @@ debug_info_view =
 
 			    // video page parsing sometimes randomly fails, so try several times
 			    network_waiting_status = "Reading Stream";
+			    vid_media_busy.store(true);
 			    if (audio_only_mode) {
 				    result = network_decoder.init(
 				        playing_video_info.audio_stream_url, stream_downloader,
@@ -2431,6 +2447,7 @@ debug_info_view =
 			    // make sure the convert thread stops before closing network_decoder
 			    network_decoder_critical_lock.lock(); // the converter thread is now suspended
 			    network_decoder.deinit();
+			    vid_media_busy.store(false);
 			    AudioExport_notify_player_stopped();
 			    network_decoder_critical_lock.unlock();
 
@@ -2686,6 +2703,10 @@ debug_info_view =
     void VideoPlayer_draw(void) {
 	    Hid_info key;
 	    Util_hid_query_key_state(&key);
+	    if (queue_feedback_frames > 0) {
+		    --queue_feedback_frames;
+		    var_need_refresh = true;
+	    }
 #ifdef MP3_DOWNLOADER_APP
 	    static int last_export_state = -1, last_export_progress = -1;
 	    int export_state = (int)AudioExport_get_state();
@@ -2910,6 +2931,14 @@ debug_info_view =
 			    }
 		    } else if ((key.h_x && key.p_b) || (key.h_b && key.p_x)) {
 			    vid_play_request = false;
+		    } else if (key.p_x && !key.h_b && !cur_video_info.id.empty() && !is_async_task_running(load_video_page) &&
+		               cur_video_info.id == youtube_get_video_id_by_url(cur_displaying_url)) {
+			    const bool added = DownloadQueue_add(cur_video_info.id, cur_video_info.title);
+			    queue_feedback = added
+			        ? (var_lang == "fr" ? "Ajoute a la file" : "Added to queue")
+			        : (var_lang == "fr" ? "Deja dans la file ou SD indisponible" : "Already queued or SD unavailable");
+			    queue_feedback_frames = 100;
+			    var_need_refresh = true;
 		    } else if (key.p_b) {
 			    global_intent.next_scene = SceneType::BACK;
 		    } else if (key.p_d_right || key.p_d_left) {
