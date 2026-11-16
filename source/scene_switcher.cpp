@@ -152,7 +152,7 @@ void mp3_guide_draw() {
 		 "Petite croix retire; Annuler remet. Bloque : touche.", "B : retour; si ca telecharge, B arrete d'abord."},
 		 {"Le resultat est un MP3 stereo 44,1 kHz.", "128 kbps : plus petit; 256 : plus lourd.",
 		 "La qualite depend de la source audio.", "Sa miniature peut devenir la pochette MP3.",
-		 "Une video bloquee ne peut pas etre exportee.", "Connexion coupee ? Relance le telechargement."}
+		 "Une video bloquee ne peut pas etre exportee.", "Succes : retire de la file. Echec : conserve."}
 	};
 	static const char *const titles_en[] = {"WELCOME", "DOWNLOAD", "DOWNLOAD QUEUE", "FORMAT AND HELP"};
 	static const char *const lines_en[4][6] = {
@@ -167,7 +167,7 @@ void mp3_guide_draw() {
 		 "Small x removes; Undo restores. Tap blocked to retry.", "B: back; during download B stops it first."},
 		 {"Output is stereo MP3 at 44.1 kHz.", "128 kbps: smaller; 256: larger.",
 		 "Quality depends on the source audio.", "The thumbnail can become MP3 cover art.",
-		 "A blocked video cannot be exported.", "Connection lost? Retry the download."}
+		 "A blocked video cannot be exported.", "Success: removed from queue. Failure: kept."}
 	};
 	const bool french = var_lang == "fr";
 	const char *const *titles = french ? titles_fr : titles_en;

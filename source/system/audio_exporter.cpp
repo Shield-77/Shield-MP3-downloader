@@ -45,6 +45,9 @@ std::atomic<int> download_phase(0); // 0: preparing, 1: connecting, 2: receiving
 std::atomic<bool> download_total_known(false);
 std::atomic<bool> download_write_failed(false);
 std::atomic<bool> download_size_exceeded(false);
+std::atomic<unsigned int> transfer_elapsed_ms(0);
+std::atomic<unsigned int> encode_elapsed_ms(0);
+std::atomic<unsigned int> encode_started_ms(0);
 std::string last_error_detail;
 static const int MP3_OUTPUT_SAMPLE_RATE = 44100;
 static const long long MAX_SOURCE_BYTES = 192LL * 1024 * 1024;
@@ -112,13 +115,13 @@ int curl_art_progress(void *, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
 	return cancel_requested.load() ? 1 : 0;
 }
 
-bool fetch_album_art(const std::string &id, std::vector<unsigned char> &image) {
+bool fetch_album_art(CURL *curl, const std::string &id, std::vector<unsigned char> &image) {
+	if (!curl) return false;
 	if (id.size() != 11) return false;
 	for (unsigned char c : id)
 		if (!std::isalnum(c) && c != '-' && c != '_') return false;
 	std::string url = "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
-	CURL *curl = curl_easy_init();
-	if (!curl) return false;
+	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 3L);
@@ -128,6 +131,8 @@ bool fetch_album_art(const std::string &id, std::vector<unsigned char> &image) {
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 7L);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+	curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 2L);
+	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Shield MP3 Downloader/3DS");
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_art);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &image);
@@ -136,7 +141,7 @@ bool fetch_album_art(const std::string &id, std::vector<unsigned char> &image) {
 	CURLcode result = curl_easy_perform(curl);
 	long status = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-	curl_easy_cleanup(curl);
+	curl_easy_reset(curl);
 	bool valid = result == CURLE_OK && status == 200 && image.size() >= 4 &&
 	             image[0] == 0xff && image[1] == 0xd8 &&
 	             image[image.size() - 2] == 0xff && image.back() == 0xd9;
@@ -263,6 +268,7 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 	uint8_t *converted = NULL;
 	bool ok = false;
 	int audio_stream_index = -1;
+	bool audio_parameters_ready = false;
 
 	// FFmpeg otherwise parses "sdmc:" as an unsupported URL protocol instead
 	// of opening the libctru-mounted SD path as a local file.
@@ -274,8 +280,20 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 		error = std::string("Cannot open downloaded audio: ") + error_buffer;
 		goto cleanup;
 	}
-	result = avformat_find_stream_info(format, NULL);
-	if (result < 0) { error = "Cannot read audio stream"; goto cleanup; }
+	// AAC in an MP4 container normally supplies complete codec parameters in
+	// its sample description. Avoid the extra stream probe when it does.
+	for (unsigned i = 0; i < format->nb_streams; ++i) {
+		const AVCodecParameters *params = format->streams[i]->codecpar;
+		if (params && params->codec_type == AVMEDIA_TYPE_AUDIO && params->codec_id == AV_CODEC_ID_AAC &&
+		    params->sample_rate > 0 && params->channels > 0 && params->extradata_size > 0) {
+			audio_parameters_ready = true;
+			break;
+		}
+	}
+	if (!audio_parameters_ready) {
+		result = avformat_find_stream_info(format, NULL);
+		if (result < 0) { error = "Cannot read audio stream"; goto cleanup; }
+	}
 	{
 		audio_stream_index = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
 		if (audio_stream_index < 0 || !codec) { error = "No supported audio stream"; goto cleanup; }
@@ -419,7 +437,7 @@ cleanup:
 	return ok;
 }
 
-bool download_and_convert(const std::string &url, const std::string &title, const std::string &id,
+bool download_and_convert(CURL *curl, const std::string &url, const std::string &title, const std::string &id,
                           long long duration_ms, long long expected_size, bool include_artwork, std::string &saved_name,
                           std::string &error) {
 	const char *directory = "sdmc:/download audio";
@@ -448,12 +466,12 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		error = "Temporary audio exceeds 192 MiB safety limit";
 		return false;
 	}
+	const u64 transfer_started_ms = osGetTime();
 	bool downloaded = expected_size > 0 && offset == expected_size;
 	if (expected_size > 0 && offset == expected_size) {
 		progress.store(99);
 	} else {
 		DownloadContext context = {NULL};
-	CURL *curl = curl_easy_init();
 	if (!curl) { error = "Could not start network download"; return false; }
 	struct curl_slist *headers = NULL;
 	headers = curl_slist_append(headers, "Accept: */*");
@@ -497,6 +515,8 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+		curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 2L);
+		curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, remaining_seconds);
 		// Abort a connection that stops delivering data instead of showing 0% forever.
 		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 64L);
@@ -563,8 +583,8 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		             " SD_error=" + std::to_string((int)download_write_failed.load()));
 		if (attempt < 2) svcSleepThread(500000000LL);
 	}
+	curl_easy_reset(curl);
 	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
 	}
 	if (!downloaded || cancel_requested.load()) {
 		if (cancel_requested.load()) {
@@ -591,11 +611,12 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		}
 		return false;
 	}
+	transfer_elapsed_ms.store((unsigned int)(osGetTime() - transfer_started_ms));
 
 	std::vector<unsigned char> cover_image;
 	if (include_artwork) {
 		state.store((int)AudioExportState::FETCHING_ART);
-		(void)fetch_album_art(id, cover_image);
+		(void)fetch_album_art(curl, id, cover_image);
 	}
 	if (cancel_requested.load()) {
 		std::remove(input_path.c_str());
@@ -604,7 +625,9 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 	}
 	state.store((int)AudioExportState::ENCODING);
 	progress.store(0);
+	encode_started_ms.store((unsigned int)osGetTime());
 	if (!encode_file(input_path, pending_output_path, duration_ms, title, cover_image, error)) {
+		encode_elapsed_ms.store((unsigned int)osGetTime() - encode_started_ms.load());
 		struct stat source_stat;
 		bool keep_complete_source = expected_size > 0 && stat(input_path.c_str(), &source_stat) == 0 &&
 		                            source_stat.st_size == expected_size;
@@ -615,6 +638,7 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		conversion_error_code.store(get_conversion_error_code(error));
 		return false;
 	}
+	encode_elapsed_ms.store((unsigned int)osGetTime() - encode_started_ms.load());
 	if (rename(pending_output_path.c_str(), output_path.c_str()) != 0) {
 		error = "Could not finalize MP3 file on SD";
 		std::remove(pending_output_path.c_str());
@@ -634,6 +658,7 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 }
 
 void worker(void *) {
+	CURL *curl = curl_easy_init();
 	while (true) {
 		LightEvent_Wait(&worker_wake_event);
 		if (stop_requested.load()) break;
@@ -650,14 +675,17 @@ void worker(void *) {
 		progress.store(0);
 		std::string url = requested_url, title = requested_title, id = requested_id;
 		std::string saved_name, error;
-		bool success = download_and_convert(url, title, id, requested_duration_ms, requested_size,
+		bool success = download_and_convert(curl, url, title, id, requested_duration_ms, requested_size,
 		                                    selected_artwork.load(), saved_name, error);
 		last_error_detail = error;
-		if (cancel_requested.load()) state.store((int)AudioExportState::CANCELLED);
-		else state.store((int)(success ? AudioExportState::DONE : AudioExportState::FAILED));
+		// A completed MP3 wins over a late cancel request. The queue must not
+		// retain an item whose final file was already saved.
+		if (success) state.store((int)AudioExportState::DONE);
+		else state.store((int)(cancel_requested.load() ? AudioExportState::CANCELLED : AudioExportState::FAILED));
 		if (success) logger.info("mp3", "Saved audio file: " + saved_name);
 		else if (!cancel_requested.load()) logger.error("mp3", error);
 	}
+	if (curl) curl_easy_cleanup(curl);
 	threadExit(0);
 }
 } // namespace
@@ -670,7 +698,15 @@ void AudioExport_init() {
 	request_pending.store(false);
 	player_stopped.store(true);
 	state.store((int)AudioExportState::IDLE);
-	worker_thread = threadCreate(worker, NULL, DEF_STACKSIZE, DEF_THREAD_PRIORITY_NORMAL, 1, false);
+	const bool old_model = var_model == CFG_MODEL_3DS || var_model == CFG_MODEL_3DSXL ||
+	                       var_model == CFG_MODEL_2DS;
+	// Core 1 has limited app time on old models. A low-priority worker on
+	// core 0 can use the time left by the UI during an export.
+	worker_thread = threadCreate(worker, NULL, DEF_STACKSIZE,
+	                             old_model ? DEF_THREAD_PRIORITY_IDLE : DEF_THREAD_PRIORITY_NORMAL,
+	                             old_model ? 0 : 1, false);
+	if (!worker_thread && old_model)
+		worker_thread = threadCreate(worker, NULL, DEF_STACKSIZE, DEF_THREAD_PRIORITY_NORMAL, 1, false);
 	if (!worker_thread) state.store((int)AudioExportState::FAILED);
 }
 
@@ -713,6 +749,9 @@ void AudioExport_begin(const std::string &url, const std::string &title, const s
 	artwork_embedded.store(false);
 	conversion_error_code.store(0);
 	last_error_detail.clear();
+	transfer_elapsed_ms.store(0);
+	encode_elapsed_ms.store(0);
+	encode_started_ms.store(0);
 	player_stopped.store(false);
 	state.store((int)AudioExportState::SELECT_BITRATE);
 }
@@ -812,7 +851,7 @@ void AudioExport_draw_overlay() {
 				unsigned int elapsed_ms = (unsigned int)osGetTime() - download_first_data_ms.load();
 				if (elapsed_ms >= 1000) {
 					unsigned int kb_per_s = (unsigned int)((uint64_t)download_written_bytes.load() * 1000 /
-					                                  (uint64_t)elapsed_ms / 1024);
+					                                  ((uint64_t)elapsed_ms * 1024));
 					line2 = std::to_string(kb_per_s) + " KB/s  B: " + (french ? "Annuler" : "Cancel");
 				}
 			}
@@ -837,11 +876,15 @@ void AudioExport_draw_overlay() {
 		case AudioExportState::ENCODING:
 			line1 = (french ? "Conversion MP3 : " : "Converting to MP3: ") +
 			        std::to_string(AudioExport_get_progress()) + "%";
-			line2 = french ? "B: Annuler" : "B: Cancel";
+			line2 = std::to_string(encode_started_ms.load()
+			    ? ((unsigned int)osGetTime() - encode_started_ms.load()) / 1000 : 0) +
+			    (french ? " s ecoulees  B: Annuler" : " s elapsed  B: Cancel");
 			break;
 		case AudioExportState::DONE:
 			line1 = french ? "MP3 sauve : SD:/download audio" : "MP3 saved to SD:/download audio";
-			line2 = french ? "A/B: fermer, puis lire un autre son" : "A/B: close, then play another audio";
+			line2 = "DL " + std::to_string(transfer_elapsed_ms.load() / 1000) +
+			        " s  MP3 " + std::to_string(encode_elapsed_ms.load() / 1000) +
+			        (french ? " s  A/B: fermer" : " s  A/B: close");
 			line3 = artwork_embedded.load()
 			        ? (french ? "Pochette incluse" : "Cover included in MP3")
 			        : (french ? "Son sauve sans pochette" : "Audio saved without cover");

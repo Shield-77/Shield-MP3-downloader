@@ -163,6 +163,17 @@ bool DownloadQueue_remove(const std::string &id) {
 	return false;
 }
 
+bool DownloadQueue_remove_completed(const std::string &id) {
+	for (size_t i = 0; i < entries.size(); ++i) {
+		if (entries[i].id != id || entries[i].status != DownloadQueueStatus::DONE) continue;
+		DownloadQueueEntry completed = entries[i];
+		entries.erase(entries.begin() + i);
+		if (!save()) { entries.insert(entries.begin() + i, completed); return false; }
+		return true;
+	}
+	return false;
+}
+
 bool DownloadQueue_undo_remove() {
 	if (!undo_available || entries.size() >= MAX_ENTRIES) return false;
 	for (const auto &entry : entries) if (entry.id == last_removed.id) return false;

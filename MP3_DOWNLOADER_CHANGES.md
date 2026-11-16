@@ -1,4 +1,11 @@
-# MP3 Downloader — v1.08, CIA version 9
+# MP3 Downloader — v1.09, CIA version 10
+
+- Une entrée est retirée de la file uniquement après la création réussie du MP3 final. Les sources bloquées, les transferts interrompus et les conversions échouées restent visibles pour être repris.
+- Le même transfert réseau est réutilisé entre les titres de la file et la pochette afin d’éviter des connexions répétées. Les sources AAC en conteneur MP4 avec paramètres complets évitent une analyse supplémentaire avant conversion.
+- Sur Old 3DS, le traitement MP3 essaie d’utiliser le cœur principal avec une priorité basse pour laisser l’interface réactive ; en cas d’échec de création du thread, l’ancien emplacement reste disponible. Les temps de téléchargement et de conversion sont affichés séparément à la fin.
+- Le calcul du débit affiché pendant le téléchargement ne divise plus par zéro autour de la première seconde et indique désormais la bonne unité.
+
+## Historique : v1.08, CIA version 9
 
 Le thread d’export dort au repos et attend un signal lors de l’arrêt du lecteur. Les tampons réseau et MP3 sont légèrement agrandis pour réduire les appels. Une erreur d’écriture SD interrompt aussitôt la tentative. Les téléchargements et les redirections de l’export MP3 sont limités à HTTPS, l’identifiant de vidéo est validé avant d’être inclus dans un nom de fichier et le fichier source temporaire est limité à 192 MiB. La vérification des certificats TLS nécessite encore un magasin de confiance compatible avec la console et reste une limite connue ; la seule restriction HTTPS ne constitue pas une authentification du serveur.
 

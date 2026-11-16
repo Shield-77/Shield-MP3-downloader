@@ -474,11 +474,16 @@ static void queue_tick() {
 		    source_unavailable ? DownloadQueueStatus::BLOCKED : DownloadQueueStatus::FAILED,
 		    state == AudioExportState::DONE ? "" :
 		    state == AudioExportState::CANCELLED ? "Interrompu" : export_error);
+		const bool completed_removed = state != AudioExportState::DONE ||
+		    (status_saved && DownloadQueue_remove_completed(queue_current_id));
 		AudioExport_dismiss();
 		queue_phase = QueuePhase::IDLE;
 		queue_current_id.clear();
 		refresh_queue_view();
-		if (!status_saved) queue_stop_requested = true;
+		if (!status_saved || !completed_removed) {
+			queue_stop_requested = true;
+			queue_stop_reason = var_lang == "fr" ? "Erreur SD : file gardee" : "SD error: queue kept";
+		}
 	}
 	if (queue_phase != QueuePhase::IDLE) return;
 	if (queue_stop_requested) {
