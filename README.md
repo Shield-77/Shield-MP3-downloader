@@ -24,7 +24,7 @@ Le code hérité de FourthTube/ThirdTube et les modifications SHIELD sont distri
 
 Il faut devkitPro/devkitARM, les bibliothèques 3DS requises, et des builds compatibles de FFmpeg, libctru, libcurl, brotli et nghttp2. Leurs archives statiques ne sont pas fournies ici. Les chemins se configurent par `FFMPEG_ROOT`, `LIBCTRU_ROOT`, `LIBCURL_ROOT`, `LIBBROTLI_ROOT` et `NGHTTP2_ROOT`. La bibliothèque Shine est construite depuis les sources incluses. Obtenir `makerom` et `bannertool` séparément ; voir [BUILD-TOOLS.md](BUILD-TOOLS.md).
 
-Les images privées de bannière et d’icône SHIELD sont intégrées au CIA distribué, mais absentes du dépôt et de l’archive source. Pour compiler votre propre CIA, placez vos images PNG aux chemins `resource/mp3downloader_banner.png` et `resource/mp3downloader_icon.png`. Ces deux chemins sont ignorés par Git.
+Les images privées de bannière et d’icône SHIELD sont intégrées au CIA distribué, mais absentes du dépôt et de l’archive source. Pour compiler votre propre CIA, placez vos images PNG aux chemins `resource/mp3downloader_banner.png` et `resource/mp3downloader_icon.png` et fournissez votre propre `resource/logo.bin` compatible avec votre chaîne de construction. Ces trois chemins sont ignorés par Git.
 
 ```sh
 make BUILD_JOBS=1 FFMPEG_ROOT=/chemin/FFmpeg LIBCTRU_ROOT=/chemin/libctru LIBCURL_ROOT=/chemin/libcurl LIBBROTLI_ROOT=/chemin/brotli NGHTTP2_ROOT=/chemin/nghttp2
