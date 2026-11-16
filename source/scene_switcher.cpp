@@ -143,7 +143,7 @@ void mp3_guide_draw() {
 	static const char *const lines_fr[4][6] = {
 		{"Parcours les videos YouTube en audio seul.", "Les miniatures restent visibles.",
 		 "A : ouvrir une video ou mettre en pause", "B : revenir a l'ecran precedent",
-		 "START : quitter (hors telechargement)", "SELECT au demarrage : revoir ce guide"},
+		 "HOME : suspendre; START : quitter hors export", "SELECT au demarrage : revoir ce guide"},
 		{"Ouvre une video puis mets-la en pause.", "Y : preparer le MP3.",
 		 "A : 128 kbps   X : 256 kbps", "Pochette : A oui, B non, X annule.",
 		 "Ensuite A confirme, B annule.", "SD:/download audio  (max. 1 heure)"},
@@ -158,7 +158,7 @@ void mp3_guide_draw() {
 	static const char *const lines_en[4][6] = {
 		{"Browse YouTube videos in audio-only mode.", "Thumbnails remain visible.",
 		 "A: open a video or pause playback", "B: return to previous screen",
-		 "START: exit (outside a download)", "Hold SELECT at startup: reopen this guide"},
+		 "HOME: suspend; START: exit outside export", "Hold SELECT at startup: reopen this guide"},
 		{"Open a video, then pause playback.", "Y: prepare the MP3 download.",
 		 "A: 128 kbps   X: 256 kbps", "Cover: A yes, B no, X cancel.",
 		 "Then A confirms, B cancels.", "SD:/download audio  (max. 1 hour)"},
@@ -320,6 +320,10 @@ void Menu_init(void) {
 	Menu_get_system_info();
 
 	logger.info(DEF_MENU_INIT_STR, "Initialized.");
+#ifdef MP3_DOWNLOADER_APP
+	// Initialization is complete; HOME may suspend the app during downloads.
+	aptSetHomeAllowed(true);
+#endif
 }
 
 void Menu_exit(void) {

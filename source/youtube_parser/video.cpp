@@ -9,12 +9,15 @@
 #include <random>
 #include "../oauth/oauth.hpp"
 #include "../system/file.hpp"
+#include "../system/libctru_wrapper.hpp"
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
 
-static bool extract_player_data(Document &json_root, RJson player_response, YouTubeVideoDetail &res) {
+static bool extract_player_data(Document &json_root, RJson player_response, YouTubeVideoDetail &res,
+	                           bool include_captions) {
 	res.playability_status = player_response["playabilityStatus"]["status"].string_value();
 	res.playability_reason = player_response["playabilityStatus"]["reason"].string_value();
+	if (res.title.empty()) res.title = player_response["videoDetails"]["title"].string_value();
 	res.is_upcoming = player_response["videoDetails"]["isUpcoming"].bool_value();
 	res.livestream_type = player_response["videoDetails"]["isLiveContent"].bool_value()
 	                          ? YouTubeVideoDetail::LivestreamType::LIVESTREAM
@@ -138,6 +141,7 @@ static bool extract_player_data(Document &json_root, RJson player_response, YouT
 		}
 	}
 
+	if (!include_captions) return true;
 	std::string captions_content;
 	std::map<std::string, std::string> caption_headers;
 
@@ -522,7 +526,22 @@ static void extract_metadata(RJson data, YouTubeVideoDetail &res) {
 	}
 }
 
-static std::string extractVisitorData() {
+static Mutex visitor_cache_lock;
+static std::string visitor_cache_data;
+static u64 visitor_cache_time_ms = 0;
+
+static std::string extractVisitorData(bool use_queue_cache) {
+	const u64 now_ms = osGetTime();
+	if (use_queue_cache) {
+		visitor_cache_lock.lock();
+		if (!visitor_cache_data.empty() && now_ms >= visitor_cache_time_ms &&
+		    now_ms - visitor_cache_time_ms < 10 * 60 * 1000) {
+			std::string cached = visitor_cache_data;
+			visitor_cache_lock.unlock();
+			return cached;
+		}
+		visitor_cache_lock.unlock();
+	}
 	std::string url = "https://www.youtube.com/sw.js_data";
 	std::map<std::string, std::string> headers = {{"Origin", "https://www.youtube.com"},
 	                                              {"Referer", "https://www.youtube.com/"}};
@@ -543,6 +562,12 @@ static std::string extractVisitorData() {
 			std::string visitor_data = data[static_cast<size_t>(0)][static_cast<size_t>(2)][static_cast<size_t>(0)]
 			                               [static_cast<size_t>(0)][static_cast<size_t>(13)]
 			                                   .string_value();
+			if (use_queue_cache && !visitor_data.empty()) {
+				visitor_cache_lock.lock();
+				visitor_cache_data = visitor_data;
+				visitor_cache_time_ms = osGetTime();
+				visitor_cache_lock.unlock();
+			}
 			logger.info("Visitor Data", "Fetched new visitor data: " + visitor_data);
 			return visitor_data;
 		} else {
@@ -555,7 +580,8 @@ static std::string extractVisitorData() {
 	}
 }
 
-YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history) {
+static YouTubeVideoDetail youtube_load_video_page_impl(std::string url, bool record_history,
+	                                                  bool audio_export_only) {
 	YouTubeVideoDetail res;
 
 	res.id = youtube_get_video_id_by_url(url);
@@ -567,7 +593,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 	std::string playlist_id = youtube_get_playlist_id_by_url(url);
 
 	std::string video_content;
-	std::string visitor_data = extractVisitorData();
+	std::string visitor_data = extractVisitorData(audio_export_only);
 
 	// Use Android VR client when authenticated, regardless of var_player_response setting
 	bool use_android_vr = OAuth::is_authenticated();
@@ -604,19 +630,21 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 	video_content = std::regex_replace(video_content, std::regex("%4"), visitor_data);
 
 	std::string post_content;
-	if (use_android_vr) {
-		post_content =
-		    R"({"videoId": "%0", %1"context": {"client": {"hl": "%2","gl": "%3","clientName": "ANDROID_VR","clientVersion": "1.65.10","deviceMake": "Oculus","deviceModel": "Quest 3","androidSdkVersion": "34","osName": "Android","osVersion": "14","visitorData": "%4"}}, "playbackContext": {"contentPlaybackContext": {"signatureTimestamp": "0"}}})";
-	} else {
-		post_content =
-		    R"({"videoId": "%0", %1"context": {"client": {"hl": "%2","gl": "%3","clientName": "MWEB","clientVersion": "2.20241202.07.00"}}, "playbackContext": {"contentPlaybackContext": {"signatureTimestamp": "0"}}})";
+	if (!audio_export_only) {
+		if (use_android_vr) {
+			post_content =
+			    R"({"videoId": "%0", %1"context": {"client": {"hl": "%2","gl": "%3","clientName": "ANDROID_VR","clientVersion": "1.65.10","deviceMake": "Oculus","deviceModel": "Quest 3","androidSdkVersion": "34","osName": "Android","osVersion": "14","visitorData": "%4"}}, "playbackContext": {"contentPlaybackContext": {"signatureTimestamp": "0"}}})";
+		} else {
+			post_content =
+			    R"({"videoId": "%0", %1"context": {"client": {"hl": "%2","gl": "%3","clientName": "MWEB","clientVersion": "2.20241202.07.00"}}, "playbackContext": {"contentPlaybackContext": {"signatureTimestamp": "0"}}})";
+		}
+		post_content = std::regex_replace(post_content, std::regex("%0"), res.id);
+		post_content = std::regex_replace(post_content, std::regex("%1"),
+		                                  playlist_id.empty() ? "" : "\"playlistId\": \"" + playlist_id + "\", ");
+		post_content = std::regex_replace(post_content, std::regex("%2"), language_code);
+		post_content = std::regex_replace(post_content, std::regex("%3"), country_code);
+		post_content = std::regex_replace(post_content, std::regex("%4"), visitor_data);
 	}
-	post_content = std::regex_replace(post_content, std::regex("%0"), res.id);
-	post_content = std::regex_replace(post_content, std::regex("%1"),
-	                                  playlist_id.empty() ? "" : "\"playlistId\": \"" + playlist_id + "\", ");
-	post_content = std::regex_replace(post_content, std::regex("%2"), language_code);
-	post_content = std::regex_replace(post_content, std::regex("%3"), country_code);
-	post_content = std::regex_replace(post_content, std::regex("%4"), visitor_data);
 
 	std::string urls[2] = {get_innertube_api_url("next"), get_innertube_api_url("player")};
 
@@ -629,15 +657,17 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 	debug_info("accessing(multi)...");
 	std::vector<NetworkResult> results;
 	bool success = true;
+	const int response_count = audio_export_only ? 1 : 2;
 	{
 		std::vector<HttpRequest> requests;
-		requests.push_back(http_post_json_request(urls[0], post_content, headers));
+		if (!audio_export_only)
+			requests.push_back(http_post_json_request(urls[0], post_content, headers));
 		requests.push_back(http_post_json_request(urls[1], video_content, headers));
 
 		results = thread_network_session_list.perform(requests);
-		for (int i = 0; i < 2; i++) {
-			if (results[i].fail) {
-				res.error = "[v-#" + std::to_string(i) + "] Network request failed";
+		for (int i = 0; i < response_count; i++) {
+			if ((size_t)i >= results.size() || results[i].fail) {
+				res.error = "[v-#" + std::to_string(audio_export_only ? 1 : i) + "] Network request failed";
 				debug_error(res.error);
 				success = false;
 			}
@@ -645,23 +675,23 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 	}
 
 	if (success) {
-		for (int i = 0; i < 2; i++) {
+		for (int i = 0; i < response_count; i++) {
 			if (!results[i].data.empty()) {
 				results[i].data.push_back('\0');
 				parse_json_destructive((char *)&results[i].data[0],
 				                       [&](Document &json_root, RJson data) {
-					                       if (i == 0) {
+					                       if (i == 0 && !audio_export_only) {
 						                       extract_metadata(data, res);
 					                       } else {
-						                       extract_player_data(json_root, data, res);
+						                       extract_player_data(json_root, data, res, !audio_export_only);
 					                       }
 				                       },
 				                       [&](const std::string &error) {
-					                       res.error = "[v-#" + std::to_string(i) + "] " + error;
+					                       res.error = "[v-#" + std::to_string(audio_export_only ? 1 : i) + "] " + error;
 					                       debug_error(res.error);
 				                       });
 			} else {
-				res.error = "Empty response data for URL index: " + std::to_string(i);
+				res.error = "Empty response data for URL index: " + std::to_string(audio_export_only ? 1 : i);
 				debug_error(res.error);
 				success = false;
 			}
@@ -689,7 +719,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 				fallback_data.push_back('\0');
 				parse_json_destructive(
 				    (char *)&fallback_data[0],
-				    [&](Document &json_root, RJson data) { extract_player_data(json_root, data, res); },
+				    [&](Document &json_root, RJson data) { extract_player_data(json_root, data, res, !audio_export_only); },
 				    [&](const std::string &error) { debug_error("[v-fallback] " + error); });
 			} else {
 				debug_error("[v-fallback] Network request failed");
@@ -716,6 +746,19 @@ YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history)
 		debug_info(res.title.empty() ? "preason: " + res.playability_reason : res.title);
 	}
 
+	return res;
+}
+
+YouTubeVideoDetail youtube_load_video_page(std::string url, bool record_history) {
+	return youtube_load_video_page_impl(url, record_history, false);
+}
+
+YouTubeVideoDetail youtube_load_video_audio_source(std::string url) {
+	YouTubeVideoDetail res = youtube_load_video_page_impl(url, false, true);
+	if (res.error.empty() &&
+	    (res.playability_status.empty() ||
+	     (res.playability_status == "OK" && (res.audio_stream_url.empty() || res.duration_ms <= 0))))
+		return youtube_load_video_page_impl(url, false, false);
 	return res;
 }
 

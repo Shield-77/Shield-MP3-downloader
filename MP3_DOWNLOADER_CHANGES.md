@@ -1,4 +1,12 @@
-# MP3 Downloader — v1.09, CIA version 10
+# MP3 Downloader — v1.10, CIA version 11
+
+- Le bouton HOME est disponible après l’initialisation. Une fermeture pendant le téléchargement conserve le fichier source partiel pour permettre sa reprise ; la file n’est pas effacée.
+- La file récupère les données audio avec une seule requête de lecteur au lieu de charger toute la fiche vidéo. Elle réutilise brièvement les données de session et revient au parcours complet si les informations essentielles manquent.
+- Le thread MP3 sur Old 3DS garde une priorité inférieure à l’interface, mais plus adaptée à la conversion que l’ancien niveau d’inactivité. Le débit et la qualité MP3 restent inchangés.
+- La file peut signaler qu’un MP3 final portant l’identifiant de la vidéo est déjà présent sur la SD et affiche le nombre de MP3 sauvés à la fin d’un lot. La petite croix ne supprime jamais un fichier audio.
+- Une exportation vide, sans trame audio décodée, ne peut plus être annoncée comme un MP3 réussi.
+
+## Historique : v1.09, CIA version 10
 
 - Une entrée est retirée de la file uniquement après la création réussie du MP3 final. Les sources bloquées, les transferts interrompus et les conversions échouées restent visibles pour être repris.
 - Le même transfert réseau est réutilisé entre les titres de la file et la pochette afin d’éviter des connexions répétées. Les sources AAC en conteneur MP4 avec paramètres complets évitent une analyse supplémentaire avant conversion.

@@ -4,6 +4,10 @@
 #include <set>
 #include <map>
 #include <numeric>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cctype>
 
 #include "scenes/search.hpp"
 #include "scenes/video_player.hpp"
@@ -112,9 +116,11 @@ enum class QueuePhase { IDLE, LOOKUP, EXPORT };
 QueuePhase queue_phase = QueuePhase::IDLE;
 int queue_bitrate = 128;
 size_t queue_batch_total = 0;
+size_t queue_completed_count = 0;
 YouTubeVideoDetail queue_lookup_detail;
 bool queue_lookup_ready = false;
 std::set<std::string> queue_attempted;
+std::set<std::string> queue_saved_mp3_ids;
 
 TextView *toast_view = (new TextView((320 - 150) / 2, 190, 150, DEFAULT_FONT_INTERVAL + SMALL_MARGIN));
 int toast_view_visible_frames_left = 0;
@@ -146,6 +152,7 @@ View *Search_get_search_bar_view() { return top_bar_view; }
 static void load_search_results(void *);
 static void load_more_search_results(void *);
 static void refresh_queue_view();
+static void scan_queue_saved_mp3();
 static void show_search_toast(const std::string &message);
 static void load_queue_video(void *);
 static void queue_tick();
@@ -161,6 +168,8 @@ void Search_init(void) {
 	queue_phase = QueuePhase::IDLE;
 	queue_current_id.clear();
 	queue_attempted.clear();
+	queue_completed_count = 0;
+	queue_saved_mp3_ids.clear();
 
 	search_box_view = (new TextView(0, SEARCH_BOX_MARGIN, 320 - SEARCH_BOX_MARGIN * 4 - URL_BUTTON_WIDTH - QUEUE_BUTTON_WIDTH,
 	                                RESULT_Y_LOW - SEARCH_BOX_MARGIN * 2 - 1));
@@ -199,7 +208,7 @@ void Search_init(void) {
 		} else {
 			queue_open = !queue_open;
 		}
-		if (queue_open) refresh_queue_view();
+		if (queue_open) { scan_queue_saved_mp3(); refresh_queue_view(); }
 		var_need_refresh = true;
 	});
 
@@ -309,6 +318,43 @@ static void show_search_toast(const std::string &message) {
 	var_need_refresh = true;
 }
 
+static void scan_queue_saved_mp3() {
+	queue_saved_mp3_ids.clear();
+	std::set<std::string> queued_ids;
+	for (const auto &entry : DownloadQueue_entries()) queued_ids.insert(entry.id);
+	if (queued_ids.empty()) return;
+	DIR *directory = opendir("sdmc:/download audio");
+	if (!directory) return;
+	while (struct dirent *file = readdir(directory)) {
+		const std::string name = file->d_name;
+		if (name.size() <= 16 || name.compare(name.size() - 4, 4, ".mp3") != 0) continue;
+		std::string stem = name.substr(0, name.size() - 4);
+		if (!stem.empty() && stem.back() == ')') {
+			const size_t open = stem.rfind(" (");
+			if (open != std::string::npos && open + 2 < stem.size() - 1) {
+				bool numbered = true;
+				for (size_t i = open + 2; i < stem.size() - 1; ++i)
+					if (!std::isdigit((unsigned char)stem[i])) numbered = false;
+				if (numbered) stem.resize(open);
+			}
+		}
+		if (stem.size() < 12 || stem[stem.size() - 12] != '_') continue;
+		const std::string id = stem.substr(stem.size() - 11);
+		if (!queued_ids.count(id) || queue_saved_mp3_ids.count(id)) continue;
+		const std::string path = "sdmc:/download audio/" + name;
+		struct stat info;
+		if (stat(path.c_str(), &info) != 0 || info.st_size <= 128) continue;
+		FILE *mp3 = fopen(path.c_str(), "rb");
+		if (!mp3) continue;
+		char signature[3] = {};
+		const bool has_header = fread(signature, 1, 3, mp3) == 3 &&
+		    signature[0] == 'I' && signature[1] == 'D' && signature[2] == '3';
+		fclose(mp3);
+		if (has_header) queue_saved_mp3_ids.insert(id);
+	}
+	closedir(directory);
+}
+
 static void refresh_queue_view() {
 	queue_list_view->recursive_delete_subviews();
 	std::vector<View *> views;
@@ -342,6 +388,9 @@ static void refresh_queue_view() {
 	views.push_back((new TextView(0, 0, 320, 22))->set_text((std::function<std::string()>)[]() {
 		return var_lang == "fr" ? "A/X: demarrer  Y: pochette  B: retour" : "A/X: start  Y: cover  B: back";
 	}));
+	views.push_back((new TextView(0, 0, 320, 22))->set_text((std::function<std::string()>)[]() {
+		return var_lang == "fr" ? "x retire la ligne, jamais le MP3" : "x removes the row, never the MP3";
+	}));
 	if (DownloadQueue_storage_error()) {
 		views.push_back((new TextView(0, 0, 320, 44))->set_text((std::function<std::string()>)[]() {
 			return var_lang == "fr" ? "File illisible : sauvegarde protegee" : "Queue unreadable: save protected";
@@ -355,7 +404,7 @@ static void refresh_queue_view() {
 	for (const auto &entry : DownloadQueue_entries()) {
 		const bool retryable = entry.status == DownloadQueueStatus::BLOCKED ||
 		                       entry.status == DownloadQueueStatus::FAILED;
-		std::string label = entry.title;
+		std::string label = queue_saved_mp3_ids.count(entry.id) ? "[MP3 SD] " + entry.title : entry.title;
 		if (entry.status == DownloadQueueStatus::BLOCKED) label += (var_lang == "fr" ? " [bloquee]" : " [blocked]");
 		else if (entry.status == DownloadQueueStatus::FAILED) label += (var_lang == "fr" ? " [echec]" : " [failed]");
 		else if (entry.status == DownloadQueueStatus::DONE) label += (var_lang == "fr" ? " [termine]" : " [done]");
@@ -384,9 +433,13 @@ static void refresh_queue_view() {
 static void load_queue_video(void *) {
 	resource_lock.lock();
 	const std::string id = queue_current_id;
+	std::string queued_title;
+	for (const auto &entry : DownloadQueue_entries())
+		if (entry.id == id) { queued_title = entry.title; break; }
 	resource_lock.unlock();
 	if (id.empty()) return;
-	YouTubeVideoDetail detail = youtube_load_video_page(youtube_get_video_url_by_id(id), false);
+	YouTubeVideoDetail detail = youtube_load_video_audio_source(youtube_get_video_url_by_id(id));
+	if (detail.title.empty()) detail.title = queued_title;
 	resource_lock.lock();
 	if (!exiting && queue_current_id == id && queue_phase == QueuePhase::LOOKUP) {
 		queue_lookup_detail = std::move(detail);
@@ -476,6 +529,10 @@ static void queue_tick() {
 		    state == AudioExportState::CANCELLED ? "Interrompu" : export_error);
 		const bool completed_removed = state != AudioExportState::DONE ||
 		    (status_saved && DownloadQueue_remove_completed(queue_current_id));
+		if (state == AudioExportState::DONE) {
+			queue_saved_mp3_ids.insert(queue_current_id);
+			++queue_completed_count;
+		}
 		AudioExport_dismiss();
 		queue_phase = QueuePhase::IDLE;
 		queue_current_id.clear();
@@ -511,7 +568,8 @@ static void queue_tick() {
 		return;
 	}
 	queue_processing = false;
-	show_search_toast(var_lang == "fr" ? "File terminee" : "Queue finished");
+	show_search_toast(std::to_string(queue_completed_count) +
+	    (var_lang == "fr" ? " MP3 sauves" : " MP3 saved"));
 }
 
 static View *result_item_to_view(const YouTubeSuccinctItem &item, size_t index) {
@@ -881,6 +939,7 @@ void Search_draw(void) {
 					// search pages ahead of the selected audio items.
 					remove_all_async_tasks_with_type(load_more_search_results);
 					queue_attempted.clear();
+					queue_completed_count = 0;
 					queue_batch_total = 0;
 					for (const auto &entry : DownloadQueue_entries())
 						if (entry.status == DownloadQueueStatus::PENDING || entry.status == DownloadQueueStatus::FAILED)

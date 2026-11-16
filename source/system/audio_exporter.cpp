@@ -232,11 +232,13 @@ int get_conversion_error_code(const std::string &error) {
 	if (error.find("close MP3 file") != std::string::npos) return 10;
 	if (error.find("finalize MP3 file") != std::string::npos) return 10;
 	if (error.find("incomplete or unreadable") != std::string::npos) return 11;
+	if (error.find("No audio frames decoded") != std::string::npos) return 11;
+	if (error.find("No MP3 audio data") != std::string::npos) return 11;
 	return 99;
 }
 
 bool write_encoded_samples(shine_t encoder, FILE *output, std::vector<int16_t> &buffer, size_t &buffered_samples,
-                           const int16_t *samples, size_t sample_count) {
+	                       const int16_t *samples, size_t sample_count, size_t &encoded_frames) {
 	const size_t frame_samples = shine_samples_per_pass(encoder);
 	while (sample_count) {
 		size_t available = frame_samples - buffered_samples;
@@ -249,6 +251,7 @@ bool write_encoded_samples(shine_t encoder, FILE *output, std::vector<int16_t> &
 			int written = 0;
 			unsigned char *encoded = shine_encode_buffer_interleaved(encoder, buffer.data(), &written);
 			if (written < 0 || (written && fwrite(encoded, 1, written, output) != (size_t)written)) return false;
+			++encoded_frames;
 			buffered_samples = 0;
 		}
 	}
@@ -269,6 +272,7 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 	bool ok = false;
 	int audio_stream_index = -1;
 	bool audio_parameters_ready = false;
+	long mp3_data_start = -1;
 
 	// FFmpeg otherwise parses "sdmc:" as an unsupported URL protocol instead
 	// of opening the libctru-mounted SD path as a local file.
@@ -331,6 +335,8 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 	if (!output) { error = "Cannot create MP3 file on SD card"; goto cleanup; }
 	setvbuf(output, NULL, _IOFBF, 32768);
 	if (!write_id3_tag(output, title, image)) { error = "Could not write MP3 cover or title"; goto cleanup; }
+	mp3_data_start = ftell(output);
+	if (mp3_data_start < 0) { error = "Could not measure MP3 output"; goto cleanup; }
 	packet = av_packet_alloc();
 	frame = av_frame_alloc();
 	if (!packet || !frame) { error = "Not enough memory to convert audio"; goto cleanup; }
@@ -338,6 +344,7 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 	{
 		std::vector<int16_t> sample_buffer((size_t)shine_samples_per_pass(encoder) * 2);
 		size_t buffered_samples = 0;
+		size_t encoded_frames = 0;
 		int converted_capacity = 4096;
 		if (av_samples_alloc(&converted, NULL, 2, converted_capacity, AV_SAMPLE_FMT_S16, 0) < 0) {
 			error = "Not enough memory for audio conversion";
@@ -362,7 +369,7 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 					return false;
 				}
 				if (!write_encoded_samples(encoder, output, sample_buffer, buffered_samples,
-				                           (const int16_t *)converted, count)) {
+				                           (const int16_t *)converted, count, encoded_frames)) {
 					error = "MP3 encoding or SD write failed";
 					return false;
 				}
@@ -412,13 +419,16 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 				error = "Could not write MP3 data";
 				goto cleanup;
 			}
+			++encoded_frames;
 		}
+		if (encoded_frames == 0) { error = "No audio frames decoded"; goto cleanup; }
 		int written = 0;
 		unsigned char *encoded = shine_flush(encoder, &written);
 		if (written < 0 || (written && fwrite(encoded, 1, written, output) != (size_t)written)) {
 			error = "Could not finish MP3 file";
 			goto cleanup;
 		}
+		if (ftell(output) <= mp3_data_start) { error = "No MP3 audio data"; goto cleanup; }
 	}
 	ok = true;
 
@@ -588,8 +598,13 @@ bool download_and_convert(CURL *curl, const std::string &url, const std::string 
 	}
 	if (!downloaded || cancel_requested.load()) {
 		if (cancel_requested.load()) {
-			std::remove(input_path.c_str());
-			resumable_partial.store(false);
+			if (stop_requested.load()) {
+				struct stat saved_partial;
+				resumable_partial.store(stat(input_path.c_str(), &saved_partial) == 0 && saved_partial.st_size > 0);
+			} else {
+				std::remove(input_path.c_str());
+				resumable_partial.store(false);
+			}
 			error = "Cancelled";
 		} else if (!error.empty()) {
 			// Keep the specific filesystem/network setup error.
@@ -619,7 +634,8 @@ bool download_and_convert(CURL *curl, const std::string &url, const std::string 
 		(void)fetch_album_art(curl, id, cover_image);
 	}
 	if (cancel_requested.load()) {
-		std::remove(input_path.c_str());
+		if (!stop_requested.load()) std::remove(input_path.c_str());
+		resumable_partial.store(stop_requested.load());
 		error = "Cancelled";
 		return false;
 	}
@@ -629,8 +645,9 @@ bool download_and_convert(CURL *curl, const std::string &url, const std::string 
 	if (!encode_file(input_path, pending_output_path, duration_ms, title, cover_image, error)) {
 		encode_elapsed_ms.store((unsigned int)osGetTime() - encode_started_ms.load());
 		struct stat source_stat;
-		bool keep_complete_source = expected_size > 0 && stat(input_path.c_str(), &source_stat) == 0 &&
-		                            source_stat.st_size == expected_size;
+		bool keep_complete_source = stat(input_path.c_str(), &source_stat) == 0 &&
+		                            (stop_requested.load() ||
+		                             (expected_size > 0 && source_stat.st_size == expected_size));
 		if (!keep_complete_source) std::remove(input_path.c_str());
 		std::remove(pending_output_path.c_str());
 		resumable_partial.store(keep_complete_source);
@@ -700,10 +717,15 @@ void AudioExport_init() {
 	state.store((int)AudioExportState::IDLE);
 	const bool old_model = var_model == CFG_MODEL_3DS || var_model == CFG_MODEL_3DSXL ||
 	                       var_model == CFG_MODEL_2DS;
-	// Core 1 has limited app time on old models. A low-priority worker on
-	// core 0 can use the time left by the UI during an export.
+	// Keep the UI ahead of the export, while avoiding the very low idle
+	// priority that can leave the encoder waiting behind other app threads.
+	int old_worker_priority = DEF_THREAD_PRIORITY_IDLE;
+	s32 main_priority = 0;
+	if (old_model && R_SUCCEEDED(svcGetThreadPriority(&main_priority, CUR_THREAD_HANDLE)) &&
+	    main_priority >= 0x18 && main_priority <= 0x3f)
+		old_worker_priority = std::min<int>(0x3f, main_priority + 1);
 	worker_thread = threadCreate(worker, NULL, DEF_STACKSIZE,
-	                             old_model ? DEF_THREAD_PRIORITY_IDLE : DEF_THREAD_PRIORITY_NORMAL,
+	                             old_model ? old_worker_priority : DEF_THREAD_PRIORITY_NORMAL,
 	                             old_model ? 0 : 1, false);
 	if (!worker_thread && old_model)
 		worker_thread = threadCreate(worker, NULL, DEF_STACKSIZE, DEF_THREAD_PRIORITY_NORMAL, 1, false);
