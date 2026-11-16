@@ -1,5 +1,6 @@
 # MP3 Downloader — v1.10, CIA version 11
 
+- Le CIA utilise la nouvelle icône et la nouvelle bannière SHIELD MP3 Downloader fournies par Shield-77. Le visuel original reste hors de l'archive source publique.
 - Le bouton HOME est disponible après l’initialisation. Une fermeture pendant le téléchargement conserve le fichier source partiel pour permettre sa reprise ; la file n’est pas effacée.
 - La file récupère les données audio avec une seule requête de lecteur au lieu de charger toute la fiche vidéo. Elle réutilise brièvement les données de session et revient au parcours complet si les informations essentielles manquent.
 - Le thread MP3 sur Old 3DS garde une priorité inférieure à l’interface, mais plus adaptée à la conversion que l’ancien niveau d’inactivité. Le débit et la qualité MP3 restent inchangés.
