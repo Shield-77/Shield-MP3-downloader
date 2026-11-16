@@ -192,7 +192,13 @@ void Search_init(void) {
 	queue_button_view->set_get_background_color([](const View &) { return LIGHT1_BACK_COLOR; });
 	queue_button_view->set_on_view_released([](View &) {
 		if (queue_processing) return;
-		queue_open = !queue_open;
+		if (global_current_scene != SceneType::SEARCH) {
+			queue_open = true;
+			global_intent.next_scene = SceneType::SEARCH;
+			global_intent.arg.clear();
+		} else {
+			queue_open = !queue_open;
+		}
 		if (queue_open) refresh_queue_view();
 		var_need_refresh = true;
 	});
