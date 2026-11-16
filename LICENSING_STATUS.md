@@ -8,7 +8,7 @@ Les archives précompilées `.a` et `.la` ont été retirées de la copie source
 
 FFmpeg peut relever de la LGPL ou de la GPL selon les options et composants activés. Ses [consignes officielles de licence](https://ffmpeg.org/legal.html) demandent notamment que les sources correspondent aux bibliothèques distribuées. Cette correspondance et les autres dépendances statiques doivent encore être documentées complètement.
 
-Les images `resource/mp3downloader_banner.png` et `resource/mp3downloader_icon.png` sont les visuels SHIELD présents dans le projet local v1.01 ; v1.08 les reprend sans modification. Le son `resource/banner.wav` est également conservé tel qu’il était dans ce projet local, sans nouvelle revendication de propriété.
+Les images privées `resource/mp3downloader_banner.png` et `resource/mp3downloader_icon.png` sont les visuels SHIELD présents dans le projet local v1.01 ; v1.08 les reprend dans le CIA sans les inclure dans la source publique. Le son `resource/banner.wav` est conservé tel qu’il était dans ce projet local, sans nouvelle revendication de propriété.
 
 Les outils `makerom` et `bannertool` sont externes et ne sont pas distribués avec le source. Voir `BUILD-TOOLS.md`.
 
