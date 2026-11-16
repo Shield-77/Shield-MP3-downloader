@@ -4,7 +4,7 @@
 #define DEF_MAIN_DIR (std::string) "/3ds/FourthTube/"
 #define DEF_SWKBD_MAX_DIC_WORDS 128
 #define DEF_CHECK_INTERNET_URL (std::string) "https://connectivitycheck.gstatic.com/generate_204"
-#define DEF_CURRENT_APP_VER (std::string) "1.07"
+#define DEF_CURRENT_APP_VER (std::string) "1.08"
 #define DEF_CURRENT_APP_VER_INT 0
 #ifdef MP3_DOWNLOADER_APP
 #define GITHUB_URL std::string("https://github.com/Shield-77/Shield-MP3-downloader")

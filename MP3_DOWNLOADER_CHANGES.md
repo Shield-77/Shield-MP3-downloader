@@ -1,4 +1,6 @@
-# MP3 Downloader — v1.05, CIA version 6
+# MP3 Downloader — v1.08, CIA version 9
+
+Le thread d’export dort au repos et attend un signal lors de l’arrêt du lecteur. Les tampons réseau et MP3 sont légèrement agrandis pour réduire les appels. Une erreur d’écriture SD interrompt aussitôt la tentative. Les téléchargements et les redirections de l’export MP3 sont limités à HTTPS, l’identifiant de vidéo est validé avant d’être inclus dans un nom de fichier et le fichier source temporaire est limité à 192 MiB. La vérification des certificats TLS nécessite encore un magasin de confiance compatible avec la console et reste une limite connue ; la seule restriction HTTPS ne constitue pas une authentification du serveur.
 
 - File de téléchargement enregistrée sur la SD : X ajoute la vidéo sélectionnée, le bouton tactile File/Queue en haut de l’écran inférieur ouvre la file depuis l’accueil ou la recherche, B la ferme après avoir arrêté le traitement éventuel, et la petite croix retire une seule entrée avec possibilité d’annuler.
 - Une source bloquée ou indisponible est indiquée et sautée ; les autres titres continuent. Les échecs restent dans la file et peuvent être retentés après une coupure réseau.

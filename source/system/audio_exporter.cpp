@@ -44,8 +44,10 @@ std::atomic<int> download_curl_code(0);
 std::atomic<int> download_phase(0); // 0: preparing, 1: connecting, 2: receiving, 3: retrying
 std::atomic<bool> download_total_known(false);
 std::atomic<bool> download_write_failed(false);
+std::atomic<bool> download_size_exceeded(false);
 std::string last_error_detail;
 static const int MP3_OUTPUT_SAMPLE_RATE = 44100;
+static const long long MAX_SOURCE_BYTES = 192LL * 1024 * 1024;
 std::string requested_url;
 std::string requested_title;
 std::string requested_id;
@@ -53,6 +55,8 @@ long long requested_duration_ms = 0;
 long long requested_size = 0;
 long long download_offset = 0;
 Thread worker_thread = 0;
+LightEvent worker_wake_event;
+LightEvent player_stop_event;
 
 struct DownloadContext {
 	FILE *file;
@@ -63,6 +67,11 @@ size_t curl_write_file(char *data, size_t size, size_t count, void *user_data) {
 	if (size && count > SIZE_MAX / size) return 0;
 	size_t bytes = size * count;
 	if (cancel_requested.load()) return 0;
+	const long long saved = download_offset + download_written_bytes.load();
+	if (saved > MAX_SOURCE_BYTES || bytes > (size_t)(MAX_SOURCE_BYTES - saved)) {
+		download_size_exceeded.store(true);
+		return 0;
+	}
 	download_received_bytes.fetch_add((unsigned int)bytes);
 	size_t written = fwrite(data, 1, bytes, context->file);
 	download_written_bytes.fetch_add((unsigned int)written);
@@ -112,6 +121,9 @@ bool fetch_album_art(const std::string &id, std::vector<unsigned char> &image) {
 	if (!curl) return false;
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 3L);
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS, (long)CURLPROTO_HTTPS);
+	curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, (long)CURLPROTO_HTTPS);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 7L);
@@ -189,7 +201,12 @@ std::string make_safe_name(const std::string &title, const std::string &id) {
 	}
 	while (!result.empty() && result.back() == ' ') result.pop_back();
 	if (result.empty()) result = "YouTube audio";
-	if (!id.empty()) result += "_" + id;
+	// The page supplies this ID. Never copy an unvalidated ID into an SD path.
+	bool safe_id = id.size() == 11;
+	for (unsigned char c : id)
+		if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
+		      (c >= 'a' && c <= 'z') || c == '-' || c == '_')) safe_id = false;
+	if (safe_id) result += "_" + id;
 	return result;
 }
 
@@ -294,7 +311,7 @@ bool encode_file(const std::string &input_path, const std::string &output_path, 
 
 	output = fopen(output_path.c_str(), "wb");
 	if (!output) { error = "Cannot create MP3 file on SD card"; goto cleanup; }
-	setvbuf(output, NULL, _IOFBF, 16384);
+	setvbuf(output, NULL, _IOFBF, 32768);
 	if (!write_id3_tag(output, title, image)) { error = "Could not write MP3 cover or title"; goto cleanup; }
 	packet = av_packet_alloc();
 	frame = av_frame_alloc();
@@ -414,6 +431,10 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 	}
 	const std::string pending_output_path = output_path + ".part";
 	std::string input_path = output_path + ".source_" + audio_source_key(url, expected_size) + ".tmp";
+	if (expected_size > MAX_SOURCE_BYTES) {
+		error = "Audio source exceeds 192 MiB safety limit";
+		return false;
+	}
 	long long offset = 0;
 	struct stat partial_stat;
 	if (stat(input_path.c_str(), &partial_stat) == 0 && partial_stat.st_size > 0 &&
@@ -423,6 +444,10 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		std::remove(input_path.c_str());
 	}
 	resumable_partial.store(offset > 0);
+	if (offset > MAX_SOURCE_BYTES) {
+		error = "Temporary audio exceeds 192 MiB safety limit";
+		return false;
+	}
 	bool downloaded = expected_size > 0 && offset == expected_size;
 	if (expected_size > 0 && offset == expected_size) {
 		progress.store(99);
@@ -454,6 +479,7 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		download_http_status.store(0);
 		download_curl_code.store(0);
 		download_write_failed.store(false);
+		download_size_exceeded.store(false);
 		download_total_known.store(expected_size > 0);
 		download_phase.store(attempt ? 3 : 1);
 		FILE *file = fopen(input_path.c_str(), offset > 0 ? "ab" : "wb");
@@ -466,6 +492,8 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 		curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+		curl_easy_setopt(curl, CURLOPT_PROTOCOLS, (long)CURLPROTO_HTTPS);
+		curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, (long)CURLPROTO_HTTPS);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
@@ -473,7 +501,7 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		// Abort a connection that stops delivering data instead of showing 0% forever.
 		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 64L);
 		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
-		curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 32768L);
+		curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65536L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_file);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &context);
@@ -491,6 +519,10 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 		if (fclose(file) != 0) write_failed = true;
 		if (write_failed) download_write_failed.store(true);
 		if (cancel_requested.load()) break;
+		if (download_size_exceeded.load()) { error = "Audio source exceeds 192 MiB safety limit"; break; }
+		// Another network attempt cannot repair a failed SD write. Leave the
+		// partial file untouched and report the storage error immediately.
+		if (download_write_failed.load()) { error = "SD write failed"; break; }
 		// Some CDNs ignore Range. Drop the partial file and retry from byte zero.
 		if (offset > 0 && status_code == 200) {
 			std::remove(input_path.c_str());
@@ -602,11 +634,13 @@ bool download_and_convert(const std::string &url, const std::string &title, cons
 }
 
 void worker(void *) {
-	while (!stop_requested.load()) {
-		if (!request_pending.exchange(false)) { svcSleepThread(100000000LL); continue; }
+	while (true) {
+		LightEvent_Wait(&worker_wake_event);
+		if (stop_requested.load()) break;
+		if (!request_pending.exchange(false)) continue;
 		if (wait_for_player.load()) {
 			while (!player_stopped.load() && !cancel_requested.load() && !stop_requested.load())
-				svcSleepThread(100000000LL);
+				LightEvent_Wait(&player_stop_event);
 		}
 		if (cancel_requested.load() || stop_requested.load()) {
 			state.store((int)AudioExportState::CANCELLED);
@@ -629,6 +663,8 @@ void worker(void *) {
 } // namespace
 
 void AudioExport_init() {
+	LightEvent_Init(&worker_wake_event, RESET_ONESHOT);
+	LightEvent_Init(&player_stop_event, RESET_ONESHOT);
 	stop_requested.store(false);
 	cancel_requested.store(false);
 	request_pending.store(false);
@@ -642,6 +678,8 @@ void AudioExport_exit() {
 	if (!worker_thread) return;
 	cancel_requested.store(true);
 	stop_requested.store(true);
+	LightEvent_Signal(&worker_wake_event);
+	LightEvent_Signal(&player_stop_event);
 	// The worker owns curl/FFmpeg and its files; never free its handle while it
 	// can still be running. Its cancellation checks make this join bounded by I/O.
 	Result join_result = threadJoin(worker_thread, UINT64_MAX);
@@ -693,20 +731,28 @@ void AudioExport_choose_artwork(bool include_artwork) {
 
 void AudioExport_confirm(bool wait_for_player_stop) {
 	if (state.load() != (int)AudioExportState::CONFIRM) return;
+	if (wait_for_player_stop) LightEvent_Clear(&player_stop_event);
 	wait_for_player.store(wait_for_player_stop);
 	player_stopped.store(!wait_for_player_stop);
 	state.store((int)AudioExportState::WAITING_FOR_PLAYER);
 	request_pending.store(true);
+	LightEvent_Signal(&worker_wake_event);
 }
 
-void AudioExport_notify_player_stopped() { player_stopped.store(true); }
+void AudioExport_notify_player_stopped() {
+	player_stopped.store(true);
+	LightEvent_Signal(&player_stop_event);
+}
 void AudioExport_cancel_prompt() {
 	if (state.load() == (int)AudioExportState::SELECT_BITRATE ||
 	    state.load() == (int)AudioExportState::SELECT_ARTWORK ||
 	    state.load() == (int)AudioExportState::CONFIRM)
 		state.store((int)AudioExportState::IDLE);
 }
-void AudioExport_cancel_operation() { cancel_requested.store(true); }
+void AudioExport_cancel_operation() {
+	cancel_requested.store(true);
+	LightEvent_Signal(&player_stop_event);
+}
 void AudioExport_dismiss() {
 	if (state.load() == (int)AudioExportState::DONE || state.load() == (int)AudioExportState::FAILED ||
 	    state.load() == (int)AudioExportState::CANCELLED)

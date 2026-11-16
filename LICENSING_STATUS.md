@@ -4,9 +4,11 @@ Shield MP3 Downloader dérive de FourthTube, lui-même dérivé de ThirdTube. Le
 
 Le projet utilise FFmpeg, libctru, libcurl, brotli, nghttp2, Shine, RapidJSON et stb_image. Les notices disponibles dans l’arbre source sont conservées, notamment `library/shine/COPYING`, `library/rapidjson/license.txt` et `library/stb_image/LICENSE`. Les fichiers `library/*/build.txt` et `.gitmodules` indiquent des versions, réglages ou dépôts amont historiques ; ils ne prouvent pas à eux seuls que les bibliothèques statiques du CIA publié ont été construites exactement depuis ces sources.
 
-Les archives précompilées `.a` et `.la` ont été retirées de la copie source publique. Pour reconstruire le programme, il faut fournir des versions compatibles de ces bibliothèques. La construction locale de v1.05 pointe vers les six archives FFmpeg dont les empreintes figurent ci-dessous ; **leur correspondance exacte avec le code source et les options de compilation historiques reste à établir**. Ne considérez pas cette publication du code comme une validation complète de conformité du binaire.
+Les archives précompilées `.a` et `.la` ont été retirées de la copie source publique. Pour reconstruire le programme, il faut fournir des versions compatibles de ces bibliothèques. La construction locale de v1.08 pointe vers les six archives FFmpeg dont les empreintes figurent ci-dessous ; ces empreintes ont été vérifiées le 16 novembre 2026. **Leur correspondance exacte avec le code source et les options de compilation historiques reste à établir**. Ne considérez pas cette publication du code comme une validation complète de conformité du binaire.
 
-FFmpeg peut relever de la LGPL ou de la GPL selon les options et composants activés. Ses [consignes officielles de licence](https://ffmpeg.org/legal.html) demandent notamment que les sources correspondent aux bibliothèques distribuées. Les futurs builds et releases doivent documenter cette correspondance avant publication.
+FFmpeg peut relever de la LGPL ou de la GPL selon les options et composants activés. Ses [consignes officielles de licence](https://ffmpeg.org/legal.html) demandent notamment que les sources correspondent aux bibliothèques distribuées. Cette correspondance et les autres dépendances statiques doivent encore être documentées complètement.
+
+Les images `resource/mp3downloader_banner.png` et `resource/mp3downloader_icon.png` sont les visuels SHIELD présents dans le projet local v1.01 ; v1.08 les reprend sans modification. Le son `resource/banner.wav` est également conservé tel qu’il était dans ce projet local, sans nouvelle revendication de propriété.
 
 Les outils `makerom` et `bannertool` sont externes et ne sont pas distribués avec le source. Voir `BUILD-TOOLS.md`.
 
