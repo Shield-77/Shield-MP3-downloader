@@ -1,18 +1,34 @@
 # Shield MP3 Downloader
 
-**Codex was used to generate the code**
-
 Application 3DS de Shield-77 basée sur [FourthTube](https://github.com/erievs/FourthTube), lui-même issu de ThirdTube. Codex a été utilisé pour écrire les modifications C++ de SHIELD. La [release v1.10](https://github.com/Shield-77/Shield-MP3-downloader/releases/tag/v1.10) fournit `MP3Downloader_dev.cia`.
+
+## Télécharger / Download
+
+**[MP3Downloader_dev.cia (v1.10)](https://github.com/Shield-77/Shield-MP3-downloader/releases/download/v1.10/MP3Downloader_dev.cia)** · [Toutes les releases](https://github.com/Shield-77/Shield-MP3-downloader/releases)
+
+Sur une 3DS modifiée, ouvrir FBI > Remote Install > Scan QR Code.
+
+<img src="docs/cia-qr.svg" width="220" alt="QR code FBI vers le CIA v1.10" />
+
+## Télécharger un morceau
 
 L’application permet d’écouter le son d’une vidéo et d’enregistrer un MP3 en 128 ou 256 kb/s. Pour exporter, mettez la lecture en pause, appuyez sur **Y**, choisissez la qualité, puis indiquez si la miniature doit être intégrée comme pochette. Une confirmation précède le téléchargement. Le fichier est enregistré dans `SD:/download audio`. Les téléchargements de plus d’une heure sont bloqués. La miniature peut différer d’une pochette d’album ; si elle manque, l’audio peut quand même être enregistré et l’écran de résultat le signale.
 
 Au premier lancement, l’application propose la langue et un guide de quatre pages. Maintenir **SELECT** pendant le démarrage rouvre le guide. Voir [les changements de la version actuelle](MP3_DOWNLOADER_CHANGES.md).
 
+## File d’attente
+
 Pour préparer plusieurs MP3, sélectionnez une vidéo dans les résultats avec haut/bas, puis appuyez sur **X**. **X** ajoute aussi la vidéo affichée depuis sa fiche, y compris dans une playlist. Touchez **File** (ou **Queue** en anglais) en haut de l’écran inférieur, juste à côté de la barre de recherche : cela ouvre la file même depuis l’accueil. Lancez la file en 128 ou 256 kb/s. **B** ferme la file ; si un téléchargement est en cours, **B** l’arrête d’abord, puis un second appui ferme la file. La pochette est désactivée par défaut dans la file pour éviter une requête réseau par titre ; touchez **Pochette** si vous la souhaitez. La file est conservée dans `SD:/3ds/MP3Downloader/download-queue-v1.tsv`. Une entrée disparaît automatiquement seulement après l’enregistrement réussi de son MP3. Une vidéo indisponible ou en échec reste signalée dans la file ; touchez sa ligne pour la réessayer. La petite croix retire uniquement la ligne de la file ; **Annuler** permet de la rétablir. Les MP3 déjà enregistrés restent dans `SD:/download audio`.
+
+## Reprise après une interruption
 
 Si la connexion coupe, la file et les titres en échec restent enregistrés. Relancez la file pour réessayer : le téléchargement reprend son fichier temporaire lorsque la source le permet. Le bouton **B** arrête le traitement en cours. Pour protéger la lecture audio, les miniatures chargent une par une pendant la lecture et plus vite lorsque le lecteur est au repos.
 
+## Retrouver ses fichiers
+
 La mention **[MP3 SD]** dans la file signale qu’un fichier MP3 final portant l’identifiant de cette vidéo a été trouvé dans `SD:/download audio`. Elle aide à repérer une file désynchronisée après une interruption ; elle ne garantit pas à elle seule que toute la chanson est correcte. La petite croix retire seulement la ligne de la file et ne supprime jamais le MP3. Le bouton **HOME** fonctionne après l’initialisation ; si l’application est fermée pendant un transfert, la file et la partie déjà reçue restent disponibles pour une reprise lorsque la source le permet.
+
+## Lecture et navigation
 
 Dans une playlist, toucher une vidéo affiche sa fiche et son bouton Play. **A** lance la vidéo affichée, puis sert à mettre en pause ou reprendre sa lecture. Le module de mise à jour hérité de FourthTube a été retiré des paramètres ; les releases de Shield MP3 Downloader sont publiées ici et consultables avec Shield Updater.
 
@@ -33,3 +49,7 @@ make BUILD_JOBS=1 FFMPEG_ROOT=/chemin/FFmpeg LIBCTRU_ROOT=/chemin/libctru LIBCUR
 ```
 
 La sortie prévue est `MP3Downloader_dev.cia`. Les chemins et étapes d’origine des dépendances sont documentés dans `library/*/build.txt` ; voir [l’état des licences](LICENSING_STATUS.md) pour les limites de provenance des archives statiques.
+
+## Développement
+
+Le code a été généré avec l'aide d'OpenAI Codex, un assistant de programmation par IA. SHIELD-77 conçoit les fonctionnalités et teste les applications sur console lorsque possible.
