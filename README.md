@@ -2,6 +2,8 @@
 
 Application 3DS de Shield-77 basée sur [FourthTube](https://github.com/erievs/FourthTube), lui-même issu de ThirdTube. Codex a été utilisé pour écrire les modifications C++ de SHIELD. La [release v1.10](https://github.com/Shield-77/Shield-MP3-downloader/releases/tag/v1.10) fournit `MP3Downloader_dev.cia`.
 
+**Provenance des binaires :** la correspondance exacte des bibliothèques FFmpeg historiques avec leurs sources et les options de compilation du CIA publié reste à établir. Voir [LICENSING_STATUS.md](LICENSING_STATUS.md). La présence du code public ne constitue pas une validation complète de la conformité du binaire.
+
 ## Télécharger / Download
 
 **[MP3Downloader_dev.cia (v1.10)](https://github.com/Shield-77/Shield-MP3-downloader/releases/download/v1.10/MP3Downloader_dev.cia)** · [Toutes les releases](https://github.com/Shield-77/Shield-MP3-downloader/releases)
